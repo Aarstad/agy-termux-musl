@@ -14,7 +14,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-LIBDIR="$HERE/lib-path-must-exceed-108-chars-see-FINDINGS-tls-stack-boundary"
+LIBDIR="$HERE/lib"
 VERSION=1.2.7
 KEEP=0
 FROM_BINARY=""
@@ -64,10 +64,6 @@ if [ -z "$FROM_BINARY" ]; then
   fi
 fi
 
-# The shim's resolved path must clear the ~108-character boundary (FINDINGS.md).
-len=$(printf '%s' "$LIBDIR" | wc -c)
-[ "$len" -ge 112 ] || die "the lib directory path is only $len chars; it must exceed ~108.
-  Move this repo somewhere with a longer path."
 
 # --- fetch -------------------------------------------------------------------
 ASSET="agy_cli_linux_arm64.tar.gz"

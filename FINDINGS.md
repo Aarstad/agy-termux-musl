@@ -105,49 +105,41 @@ Note the telemetry POSTs to `play.googleapis.com/log` fail with the same error
 every 5 seconds and are unrelated to whether login works — the line that matters
 is `browser.go consumerOAuth`.
 
-### Path-length sensitivity — a second, unfixed bug
+### Path-length sensitivity — solved: a glibc TCB assumption
 
-The 20-byte `csel` patch is necessary but **not sufficient**. The patched binary
-also faults before `main()` when the shim's resolved path is short:
+After the load-bias patch the binary still faulted before `main()` when the shim's
+resolved path was shorter than ~108 characters — a sharp, deterministic threshold
+that appeared to depend on nothing semantic.
 
-| shim path length | result |
-|---|---|
-| 100 chars | crash |
-| 108 chars | crash |
-| 110 chars | works |
-| 120+ chars | works |
+It was not about paths. Reading `TPIDR_EL0` directly inside the process shows the
+real mechanism:
 
-Sharp threshold between 108 and 110, fully deterministic (5/5 either side). It
-depends only on the **length** of the path the shim loads from — not on the
-directory, not on rpath vs `LD_LIBRARY_PATH`, not on environment size, and not
-on the shim's contents (byte-identical copies at different path lengths behave
-differently).
+| shim path length | TP | `tp-0x260` | result |
+|---|---|---|---|
+| 104-109 | `…77100` | `…76ea0` | **not mapped** -> fault |
+| 110+ | `…29180` | `…28f20` | mapped -> works |
 
-This is why the work initially appeared to succeed: the scratchpad path used
-during development was 162 characters, comfortably clear of the boundary. A
-"tidier" install under `~/.local/libexec/agy-musl` (56 chars) crashed, which
-looked at first like patchelf damage or a TLS-layout problem. It is neither.
+At the crashing lengths the thread pointer landed at `…77100` — 256 bytes into its
+page — and its mapping was `agy.bin`'s own `rw-p` segment *starting* at `…77000`, so
+`tp - 0x260` fell off the front into unmapped space. At longer lengths the thread
+pointer landed inside a large anonymous `rw-p` region with room below it.
 
-The fault differs from the load-bias one:
+The binary reads `[tp - 0x260]`, `[tp - 0x258]` and `[tp - 0x250]`: glibc reserves
+several hundred bytes below the thread pointer, musl's TCB does not. Path length only
+decided where the thread pointer happened to land.
 
-    SIGSEGV si_addr=0x5fdd176ea0   at 0x94e3538   (high address)
-    vs. the csel bug's
-    SIGSEGV si_addr=0x5be0         at 0x94e32b8   (near-null)
+**Fix:** the code already branches on `[tp - 0x260]` being zero and falls back to
+reading the same values from globals, so the load is forced to zero and the fallback
+is taken unconditionally:
 
-Disassembly at the second site:
+    94e3530: mrs  x9, TPIDR_EL0
+    94e3534: sub  x8, x9, #0x260
+    94e3538: ldr  x8, [x8]        ->  mov x8, xzr   (0xf9400108 -> 0xaa1f03e8)
+    94e353c: cbz  x8, <fallback>
 
-    94e3530: mrs  x9, TPIDR_EL0      ; thread pointer
-    94e3534: sub  x8, x9, #0x260     ; 608 bytes below it
-    94e3538: ldr  x8, [x8]           ; faults
+Verified at path lengths from 56 to 162 characters, including a full authenticated
+API call. The padded lib directory is gone.
 
-It reads thread-local storage at a fixed negative offset from `TPIDR_EL0`, so
-something about how the path is stored perturbs the layout it expects. **The
-exact mechanism is not established** — the length dependence is measured, the
-cause is not. Calling it "TLS" names the faulting instruction, not the bug.
-
-Consequence: the repo's lib directory is deliberately padded to 120 characters,
-and `agy` refuses to run if it drops below 112. Moving this repo to a much
-shorter path will break it.
 
 ### Verified
 

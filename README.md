@@ -19,7 +19,7 @@ gemini-3.1-pro-high	Gemini 3.1 Pro (High)
 Logged in, authenticated, talking to Google's API from a phone.
 
 Nothing here redistributes Google's binary. `install.sh` takes their published
-release, applies **20 bytes** of patches, and builds a small shim beside it.
+release, applies **24 bytes** of patches, and builds a small shim beside it.
 
 ## What actually breaks, and why
 
@@ -53,6 +53,25 @@ prelinked objects; for a PIE under musl every `d_ptr` needs the bias. The binary
 faults at `0x5be0` before `main()`.
 
 Five `csel` instructions, replaced with unconditional `mov`. 20 bytes.
+
+**2b. glibc TCB offsets.** The binary also reads `[tp - 0x260]`, inside the several
+hundred bytes glibc reserves below the thread pointer. musl's TCB is much smaller, so
+that address is frequently unmapped and the process faults before `main()`:
+
+```asm
+mrs  x9, TPIDR_EL0
+sub  x8, x9, #0x260
+ldr  x8, [x8]          ; faults
+cbz  x8, <fallback>    ; fallback reads the same data from globals
+```
+
+Whether it faults depends on where the thread pointer lands relative to its mapping,
+which made it look like it depended on the *length of unrelated filesystem paths* — a
+short shim path crashed, a long one worked. It does not; that was a symptom.
+
+Since the code already branches on the value being zero and has a fallback that reads
+globals, forcing the load to zero takes that path unconditionally. One instruction,
+4 bytes.
 
 This is not Android-specific — it breaks any PIE under any non-prelinking loader. See
 [`UPSTREAM-REPORT.md`](UPSTREAM-REPORT.md); upstream issues
@@ -109,22 +128,9 @@ Then run `agy` and follow the browser prompts to log in.
 
 ## Known issues
 
-**The install path must be longer than ~108 characters.** This is a second, unfixed bug.
-After the load-bias patch the binary still faults before `main()` when the shim's resolved
-path is short — a sharp, deterministic threshold between 108 and 110 characters:
+None outstanding. The install path constraint that earlier versions carried is fixed —
+see "glibc TCB offsets" below.
 
-| shim path length | result |
-|---|---|
-| 108 chars | crash |
-| 110 chars | works |
-
-The fault is at `0x94e3538`: `mrs x9, TPIDR_EL0; sub x8, x9, #0x260; ldr x8, [x8]` — a
-fixed negative offset from the thread pointer, faulting at a high address rather than the
-near-null of the load-bias bug. The length dependence is measured; **the mechanism is
-not established**.
-
-Hence the deliberately long `lib-…` directory name, and the length check in `agy` that
-refuses to run below 112. If you move this repo somewhere much shorter, it will break.
 
 **Verified:** a full interactive session — model turns, tool use (`Read`, `Bash`),
 multi-turn reasoning, streaming output, SQLite state, a completed OAuth login and

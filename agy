@@ -20,22 +20,11 @@ HERE="$(cd "$(dirname "$SELF")" && pwd -P)"
 BIN="$HERE/agy.bin"
 PROXY="$HERE/dns-proxy"
 
-# The shim's resolved path must be longer than ~108 characters or the binary
-# faults before main(). See FINDINGS.md ("Path-length sensitivity"): this is a
-# second, unfixed bug, separate from the google_find_phdr load-bias patch. The
-# directory name is padded to stay clear of the boundary -- do not shorten it,
-# and do not move this repo to a much shorter path without re-checking.
-LIBDIR="$HERE/lib-path-must-exceed-108-chars-see-FINDINGS-tls-stack-boundary"
+LIBDIR="$HERE/lib"
 
 [ -x "$BIN" ] || { echo "agy: $BIN is missing" >&2; exit 1; }
 [ -e "$LIBDIR/libagyshim.so" ] || { echo "agy: shim missing from $LIBDIR" >&2; exit 1; }
 
-len=$(printf '%s' "$LIBDIR" | wc -c)
-if [ "$len" -lt 112 ]; then
-  echo "agy: the shim path is only $len chars; it must exceed ~108." >&2
-  echo "     Move this repo to a longer path, or lengthen the lib directory name." >&2
-  exit 1
-fi
 
 PROXY_PID=""
 cleanup() { [ -n "${PROXY_PID:-}" ] && kill "$PROXY_PID" 2>/dev/null; return 0; }
