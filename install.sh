@@ -46,6 +46,24 @@ LOADER="$PREFIX/lib/ld-musl-aarch64.so.1"
   Install it first — claude-code-termux-musl's install.sh fetches it from Alpine:
   https://github.com/Aarstad/claude-code-termux-musl"
 
+# TCMalloc assumes a 48-bit virtual address space and aborts before main() on a
+# 39-bit-VA kernel, which is most Android devices. That fix is not implemented
+# here (see patch.py); refuse to build a binary that cannot start rather than
+# leaving the user with a confusing TCMalloc abort.
+if [ -z "$FROM_BINARY" ]; then
+  top="$(awk 'END{split($1,a,"-"); print a[2]}' /proc/self/maps 2>/dev/null)"
+  if [ -n "$top" ] && [ "${#top}" -le 10 ]; then
+    die "this kernel uses a 39-bit user VA, where the stock binary aborts in
+  TCMalloc before anything else runs. That patch is not implemented here.
+  Start from wallentx's already-patched engine instead:
+
+    curl -fsSL -o agy.tar.gz \\
+      https://github.com/wallentx/antigravity-cli-termux/releases/download/v$VERSION/antigravity-termux-standalone.tar.gz
+    tar xzf agy.tar.gz agy.va39
+    ./install.sh --from-binary agy.va39"
+  fi
+fi
+
 # The shim's resolved path must clear the ~108-character boundary (FINDINGS.md).
 len=$(printf '%s' "$LIBDIR" | wc -c)
 [ "$len" -ge 112 ] || die "the lib directory path is only $len chars; it must exceed ~108.

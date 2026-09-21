@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
 """Patch Google's Antigravity CLI binary to run under musl on Android.
 
-Two independent fixes, both in-place; neither changes the file size.
+One in-place fix; it does not change the file size.
 
-1. google_find_phdr load bias. The tag-scan loop decides, per dynamic pointer
-   tag, whether the value needs the load bias added:
+google_find_phdr load bias. The tag-scan loop decides, per dynamic pointer tag,
+whether the value needs the load bias added:
 
-       ldr  Xn,  [x12], #0x10        ; raw tag value
-       sub  x15, Xn, #0x1, lsl #12   ; raw - 0x1000
-       add  Xm,  Xn, x19             ; raw + dlpi_addr
-       cmp  x15, x11                 ; x11 = 0xfffffffefffff001
-       cset w15, hs
-       csel Xd,  Xn, Xm, lo          ; keep raw if "looks absolute"
+    ldr  Xn,  [x12], #0x10        ; raw tag value
+    sub  x15, Xn, #0x1, lsl #12   ; raw - 0x1000
+    add  Xm,  Xn, x19             ; raw + dlpi_addr
+    cmp  x15, x11                 ; x11 = 0xfffffffefffff001
+    cset w15, hs
+    csel Xd,  Xn, Xm, lo          ; keep raw if "looks absolute"
 
-   Because x11 is near the top of the unsigned range, the comparison is true for
-   any realistic link-time offset, so the raw value is always kept. That is only
-   correct for prelinked objects; for a PIE under musl every d_ptr needs the
-   bias. Replacing each csel with `mov Xd, Xm` takes the biased value always.
+Because x11 is near the top of the unsigned range, the comparison is true for
+any realistic link-time offset, so the raw value is always kept. That is only
+correct for prelinked objects; for a PIE under musl every d_ptr needs the bias.
+Replacing each csel with `mov Xd, Xm` takes the biased value always.
 
-   The cmp/cset are left alone: w15 is read later by the caller.
+The cmp/cset are left alone: w15 is read later by the caller.
 
-2. TCMalloc's 48-bit virtual address assumption, which aborts before main on the
-   39-bit-VA kernels most Android devices use.
+This does NOT patch TCMalloc's 48-bit virtual-address assumption, which aborts
+before main() on the 39-bit-VA kernels most Android devices use. That is a
+separate fix (~82 bytes, retargeting TCMalloc's address-bit shifts from 48 to
+39) and this repo does not reimplement it -- start from wallentx's already
+VA39-patched engine instead, via install.sh --from-binary. See README.
 
 Sites are found by opcode pattern, not by hardcoded offsets, so a new release
 that moves the code still patches. Run with --dry-run to see what would change.
@@ -100,20 +103,6 @@ def patch_load_bias(f, loads, dry):
     return len(hits)
 
 
-def patch_va39(f, loads, dry):
-    """TCMalloc's 48-bit VA assumption.
-
-    The published wallentx VA39 patch rewrites the tagged mmap hint constants so
-    the reservations land inside a 39-bit user VA. Those constants are what this
-    looks for; if the binary already runs on a 39-bit kernel there is nothing to
-    do, which is the common case for a build that has been patched already.
-    """
-    # Implemented as a no-op placeholder: the VA39 fix is carried by the upstream
-    # patched release this repo is built against, and re-deriving it belongs in
-    # its own change rather than being guessed at here.
-    return 0
-
-
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     dry = "--dry-run" in sys.argv
@@ -126,7 +115,6 @@ def main():
         loads = find_loads(f)
         print("google_find_phdr load-bias sites:")
         n = patch_load_bias(f, loads, dry)
-        patch_va39(f, loads, dry)
 
     print(f"{'would patch' if dry else 'patched'} {n} instruction(s), {n * 4} bytes")
 
