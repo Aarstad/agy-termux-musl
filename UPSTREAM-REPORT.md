@@ -2,16 +2,17 @@
 
 ## Summary
 
-`agy` crashes with `SIGSEGV` (`si_addr=0x5be0`) before reaching `main()` under any
-dynamic loader that does not hand it pre-relocated dynamic-section pointers, such as
-musl.
+While investigating the crashes reported in #9 (and #64) on 39-bit ARM64 environments,
+working past the TCMalloc issue reveals a secondary, independent segfault in
+`google_find_phdr` before reaching `main()`.
 
-**This is a separate bug from #9 and #64**, which are both TCMalloc's 48-bit virtual
-address assumption. That failure comes first — it aborts under glibc too, which is why
-#9 reproduces inside proot-distro Debian — and this one is only reachable once it is
-fixed. As far as I can tell it has not been reported: anyone still hitting TCMalloc
-never gets here, and anyone running a VA-patched build under glibc will not see it
-either. It needs both a VA-patched binary and a non-prelinking loader.
+`agy` crashes with `SIGSEGV` (`si_addr=0x5be0`) under any dynamic loader that does not
+hand it pre-relocated dynamic-section pointers, such as musl. It is filed separately
+because the cause and the fix are unrelated to TCMalloc: that failure comes first and
+aborts under glibc too, which is why #9 reproduces inside proot-distro Debian. This one
+needs both a VA-patched binary and a non-prelinking loader, which is presumably why it
+has not surfaced — anyone still hitting TCMalloc never gets here, and anyone running a
+VA-patched build under glibc will not see it either.
 
 The root cause is a **load-bias heuristic in `google_find_phdr`** that systematically
 selects the unrelocated value of dynamic pointer tags. It is not OS-specific and not a
