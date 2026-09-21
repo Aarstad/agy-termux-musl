@@ -1,0 +1,4 @@
+agy.bin
+dns-proxy
+*.tar.gz
+lib-path-must-exceed-108-chars-see-FINDINGS-tls-stack-boundary/*.so

@@ -1,0 +1,86 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Run the musl-patched Antigravity CLI on Termux.
+#
+# Starts the bionic-side DNS proxy (musl has no /etc/resolv.conf on Android, so
+# DNS inside the process is dead) and points agy at it, then runs the binary.
+#
+#   AGY_NO_PROXY=1   use ambient proxy settings instead of starting one
+#
+# Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
+set -euo pipefail
+
+# Resolve through a symlink: ~/.local/bin/agy points here, but the binary,
+# shim and proxy all live beside this script in the repo.
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do
+  link="$(readlink "$SELF")"
+  case "$link" in /*) SELF="$link" ;; *) SELF="$(dirname "$SELF")/$link" ;; esac
+done
+HERE="$(cd "$(dirname "$SELF")" && pwd -P)"
+BIN="$HERE/agy.bin"
+PROXY="$HERE/dns-proxy"
+
+# The shim's resolved path must be longer than ~108 characters or the binary
+# faults before main(). See FINDINGS.md ("Path-length sensitivity"): this is a
+# second, unfixed bug, separate from the google_find_phdr load-bias patch. The
+# directory name is padded to stay clear of the boundary -- do not shorten it,
+# and do not move this repo to a much shorter path without re-checking.
+LIBDIR="$HERE/lib-path-must-exceed-108-chars-see-FINDINGS-tls-stack-boundary"
+
+[ -x "$BIN" ] || { echo "agy: $BIN is missing" >&2; exit 1; }
+[ -e "$LIBDIR/libagyshim.so" ] || { echo "agy: shim missing from $LIBDIR" >&2; exit 1; }
+
+len=$(printf '%s' "$LIBDIR" | wc -c)
+if [ "$len" -lt 112 ]; then
+  echo "agy: the shim path is only $len chars; it must exceed ~108." >&2
+  echo "     Move this repo to a longer path, or lengthen the lib directory name." >&2
+  exit 1
+fi
+
+PROXY_PID=""
+cleanup() { [ -n "${PROXY_PID:-}" ] && kill "$PROXY_PID" 2>/dev/null; return 0; }
+trap cleanup EXIT HUP INT TERM
+
+if [ -z "${AGY_NO_PROXY:-}" ] && [ -x "$PROXY" ]; then
+  # The proxy prints its port on stdout then serves until killed.
+  FIFO="$(mktemp -u "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/agy-proxy.XXXXXX")"
+  if mkfifo "$FIFO" 2>/dev/null; then
+    "$PROXY" > "$FIFO" 2>/dev/null &
+    PROXY_PID=$!
+    read -r -t 15 PORT < "$FIFO" || true
+    rm -f "$FIFO"
+    if [ -n "${PORT:-}" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
+      export http_proxy="http://127.0.0.1:$PORT"
+      export https_proxy="$http_proxy"
+      export HTTP_PROXY="$http_proxy"
+      export HTTPS_PROXY="$http_proxy"
+      export all_proxy="$http_proxy"
+    else
+      PROXY_PID=""
+      echo "agy: DNS proxy did not start; network will not work" >&2
+    fi
+  fi
+fi
+
+# Go's crypto/x509 looks for a CA bundle at the standard Linux paths
+# (/etc/ssl/certs/ca-certificates.crt and friends). Android has none of them, so
+# every TLS verification fails with "certificate signed by unknown authority" --
+# including the OAuth token-exchange POST, which makes login impossible. Termux
+# ships the bundle at $PREFIX/etc/tls/cert.pem; point Go at it.
+: "${PREFIX:=/data/data/com.termux/files/usr}"
+if [ -z "${SSL_CERT_FILE:-}" ] && [ -r "$PREFIX/etc/tls/cert.pem" ]; then
+  export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
+fi
+[ -n "${SSL_CERT_DIR:-}" ] || export SSL_CERT_DIR="$PREFIX/etc/tls"
+
+# Termux preloads a bionic library that a musl process cannot relocate.
+unset LD_PRELOAD
+
+export LD_LIBRARY_PATH="$LIBDIR"
+
+# Deliberately not exec: the EXIT trap is what stops the proxy, and exec would
+# replace this shell and orphan it. One idle shell buys deterministic cleanup.
+"$BIN" "$@"
+rc=$?
+cleanup
+exit "$rc"

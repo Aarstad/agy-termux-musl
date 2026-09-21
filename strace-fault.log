@@ -1,0 +1,137 @@
+20276 [0000007cf0104188] execve("./musltest", ["./musltest", "--version"], 0x7fc5f2c878 /* 61 vars */) = 0
+20276 [0000006fe4e2bb08] set_tid_address(0x6fe4ecee88) = 20276
+20276 [0000006fe4e353d8] brk(NULL)      = 0x64ac617000
+20276 [0000006fe4e353f8] brk(0x64ac619000) = 0x64ac619000
+20276 [0000006fe4e4a310] mmap(0x64ac617000, 4096, PROT_NONE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0x64ac617000
+20276 [0000006fe4e6cd08] openat(AT_FDCWD, "/data/data/com.termux/files/usr/tmp/claude-10242/-data-data-com-termux-files-home-projects-claude-code-termux-musl/f9a16d64-767c-4089-af26-c50280211f68/scratchpad/libagyshim.so", O_RDONLY|O_LARGEFILE|O_CLOEXEC) = 3
+20276 [0000006fe4e2c9b0] fcntl(3, F_SETFD, FD_CLOEXEC) = 0
+20276 [0000006fe4e5ea38] fstat(3, {st_mode=S_IFREG|0700, st_size=4424, ...}) = 0
+20276 [0000006fe4e6cd08] read(3, "\177ELF\2\1\1\0\0\0\0\0\0\0\0\0\3\0\267\0\1\0\0\0\0\0\0\0\0\0\0\0"..., 960) = 960
+20276 [0000006fe4e4a310] mmap(NULL, 20480, PROT_READ|PROT_EXEC, MAP_PRIVATE, 3, 0) = 0x6fe4ec2000
+20276 [0000006fe4e4a310] mmap(0x6fe4ec6000, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED, 3, 0) = 0x6fe4ec6000
+20276 [0000006fe4e6cd08] close(3)       = 0
+20276 [0000006fe4e77850] mprotect(0x6fe4ec6000, 4096, PROT_READ) = 0
+20276 [0000006fe4e77850] mprotect(0x6fe4ecb000, 4096, PROT_READ) = 0
+20276 [0000006fe4e77850] mprotect(0x64a3783000, 22540288, PROT_READ) = 0
+20276 [0000006fe4e2bb08] set_tid_address(0x6fe4ecee88) = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebf000
+20276 [0000006fe4e4a310] mmap(NULL, 16384, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebb000
+20276 [0000006fe4e4a310] mmap(NULL, 32768, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4eb3000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4eb3000, 32768) = 0
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebb000, 16384) = 0
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebf000, 8192) = 0
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebf000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebf000, 8192) = 0
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebf000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebf000, 8192) = 0
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebf000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebf000, 8192) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebf000
+20276 [0000006fe4e4a310] mmap(NULL, 16384, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebb000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebb000, 16384) = 0
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebf000, 8192) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebf000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ec1000, 4096) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGSEGV, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5dff8] rt_sigprocmask(SIG_UNBLOCK, [RT_1 RT_2], NULL, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGSEGV, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGILL, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGILL, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGFPE, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGFPE, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5dc9c] rt_sigprocmask(SIG_BLOCK, ~[], [RTMIN], 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGABRT, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5dcd8] rt_sigprocmask(SIG_SETMASK, [RTMIN], NULL, 8) = 0
+20276 [0000006fe4e5dc9c] rt_sigprocmask(SIG_BLOCK, ~[], [RTMIN], 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGABRT, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5dcd8] rt_sigprocmask(SIG_SETMASK, [RTMIN], NULL, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGBUS, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGBUS, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGTERM, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGTERM, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGTRAP, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGTRAP, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGHUP, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGHUP, {sa_handler=SIG_IGN, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGPIPE, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGPIPE, {sa_handler=SIG_IGN, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGSEGV, NULL, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGBUS, NULL, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGFPE, NULL, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGPIPE, NULL, {sa_handler=SIG_IGN, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGILL, NULL, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGXFSZ, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGXFSZ, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGQUIT, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGQUIT, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGHUP, NULL, {sa_handler=SIG_IGN, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGINT, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGINT, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGTERM, NULL, {sa_handler=0x64a347ec80, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK|SA_RESTART|SA_NODEFER|SA_SIGINFO, sa_restorer=0x6fe4e5dc50}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGUSR1, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGUSR1, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGUSR2, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGUSR2, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGALRM, NULL, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGALRM, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ec1000
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebe000
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] mmap(NULL, 65536, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4dfc000
+20276 [0000006fe4e3087c] prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, 0x6fe4dfc000, 65536, "absl") = 0
+20276 [0000006fe4e497cc] openat(AT_FDCWD, "/proc/self/cmdline", O_RDONLY) = 3
+20276 [0000006fe4e497cc] read(3, "./musltest\0--version\0", 8191) = 21
+20276 [0000006fe4e497cc] read(3, "", 8170) = 0
+20276 [0000006fe4e497cc] close(3)       = 0
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e4a310] mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebd000
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e483b4] prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+20276 [0000006fe4e5e18c] sigaltstack(NULL, {ss_sp=NULL, ss_flags=SS_DISABLE, ss_size=0}) = 0
+20276 [0000006fe4e4a310] mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x6fe4ebb000
+20276 [0000006fe4e4a4d8] munmap(0x6fe4ebd000, 4096) = 0
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [00000064a34e32b8] --- SIGSEGV {si_signo=SIGSEGV, si_code=SEGV_MAPERR, si_addr=0x5be0} ---
+20276 [0000006fe4e70680] rt_sigprocmask(SIG_BLOCK, [SEGV], NULL, 8) = 0
+20276 [0000006fe4e5df38] rt_sigaction(SIGSEGV, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=SA_RESTORER|SA_ONSTACK, sa_restorer=0x6fe4e5dc50}, NULL, 8) = 0
+20276 [0000006fe4e497cc] gettid()       = 20276
+20276 [0000006fe4e497cc] write(2, "E0000 00:00:1789943246.797067   "..., 105) = 105
+20276 [0000006fe4e5dcbc] rt_sigprocmask(SIG_BLOCK, ~[RTMIN RT_1 RT_2], [SEGV RTMIN], 8) = 0
+20276 [0000006fe4e5de5c] tkill(20276, SIGSEGV) = 0
+20276 [0000006fe4e5dcd8] rt_sigprocmask(SIG_SETMASK, [SEGV RTMIN], NULL, 8) = 0
+20276 [0000006fe4e5dc58] rt_sigreturn({mask=[RTMIN]}) = 432187600367
+20276 [00000064a34e32b8] --- SIGSEGV {si_signo=SIGSEGV, si_code=SI_TKILL, si_pid=20276, si_uid=10242} ---
+20276 [????????????????] +++ killed by SIGSEGV +++
