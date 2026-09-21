@@ -91,7 +91,7 @@ fi
 
 # --- patch -------------------------------------------------------------------
 # The google_find_phdr load-bias fix: 20 bytes, in place, file size unchanged.
-# See FINDINGS.md and UPSTREAM-REPORT.md.
+# See FINDINGS.md, and antigravity-cli#1075 upstream.
 #
 # NOTE: TCMalloc's 48-bit VA assumption is a separate problem and is NOT patched
 # here. On a 39-bit-VA kernel (most Android devices) the stock binary aborts in

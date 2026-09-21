@@ -73,11 +73,13 @@ Since the code already branches on the value being zero and has a fallback that 
 globals, forcing the load to zero takes that path unconditionally. One instruction,
 4 bytes.
 
-This is not Android-specific — it breaks any PIE under any non-prelinking loader. See
-[`UPSTREAM-REPORT.md`](UPSTREAM-REPORT.md); upstream issues
-[#9](https://github.com/google-antigravity/antigravity-cli/issues/9) and
-[#64](https://github.com/google-antigravity/antigravity-cli/issues/64) are the same
-family, and #64 is a plain ARM64 router with no Android involved.
+This is not Android-specific — it breaks any PIE under any non-prelinking loader. Reported
+upstream as
+[antigravity-cli#1075](https://github.com/google-antigravity/antigravity-cli/issues/1075),
+with the full analysis there. Related: [#9](https://github.com/google-antigravity/antigravity-cli/issues/9)
+and [#64](https://github.com/google-antigravity/antigravity-cli/issues/64) are a separate
+TCMalloc problem in the same family, and #64 is a plain ARM64 router with no Android
+involved.
 
 **3. DNS.** musl resolves through `/etc/resolv.conf`, which Android does not have, so DNS
 inside the process hangs rather than failing. A small proxy runs on the bionic side, where
