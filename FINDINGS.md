@@ -161,9 +161,14 @@ shorter path will break it.
 
 ### Not yet verified
 
-- Long sessions, streaming, MCP servers, subagents, tool use, actual model
-  turns. Everything up to and including authenticated API calls works; what a
-  real coding session does has not been exercised.
+- MCP servers, subagents, long-running sessions, and whether the path-length
+  boundary can resurface under memory pressure.
+
+A full interactive session works: model turns (Gemini 3.8 Flash, high effort),
+tool use (`Read`, `Bash`), multi-turn reasoning and streaming output all behave
+as they would on a supported platform. Tested by having agy read this repo's own
+FINDINGS.md and UPSTREAM-REPORT.md and summarise the patch that makes it run —
+its summary was technically correct on every point.
 
 ## What was established
 
