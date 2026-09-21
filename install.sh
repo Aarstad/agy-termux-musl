@@ -71,7 +71,7 @@ URL="https://github.com/google-antigravity/antigravity-cli/releases/download/$VE
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 if [ -n "$FROM_BINARY" ]; then
-  [ -f "$FROM_BINARY" ] || die "no such file: $FROM_BINARY"
+  if [ ! -f "$FROM_BINARY" ]; then die "no such file: $FROM_BINARY"; fi
   say "using the binary given with --from-binary"
   cp "$FROM_BINARY" "$tmp/antigravity"
 elif [ -f "$HERE/$ASSET" ]; then

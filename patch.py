@@ -64,7 +64,16 @@ LDR_X8_X8 = 0xF9400108  # ldr x8, [x8]
 MOV_X8_XZR = 0xAA1F03E8  # mov x8, xzr
 
 
-def patch_tcb_read(f, loads, dry):
+def read_segments(f, loads):
+    """Read each PT_LOAD once; both patchers scan the same buffers."""
+    segs = []
+    for va, off, fsz in loads:
+        f.seek(off)
+        segs.append((va, off, f.read(fsz)))
+    return segs
+
+
+def patch_tcb_read(f, segs, dry):
     """Neutralise a read into glibc's reserved space below the thread pointer.
 
     The binary reads [tp - 0x260] and branches on whether it is zero:
@@ -84,14 +93,31 @@ def patch_tcb_read(f, loads, dry):
     unconditionally, which is the correct behaviour when the slot does not
     exist.
     """
+    MRS = struct.pack("<I", MRS_TPIDR)
     hits = []
-    for va, off, fsz in loads:
-        f.seek(off)
-        blob = f.read(fsz)
-        for i in range(0, len(blob) - 12, 4):
-            a, b, c = struct.unpack("<III", blob[i:i + 12])
-            if a == MRS_TPIDR and b == SUB_260 and c == LDR_X8_X8:
-                hits.append((off + i + 8, va + i + 8))
+    for va, off, blob in segs:
+        i = blob.find(MRS)
+        while i != -1:
+            if i % 4 == 0 and i + 12 <= len(blob):
+                b2, c2 = struct.unpack("<II", blob[i + 4:i + 12])
+                if b2 == SUB_260 and c2 == LDR_X8_X8:
+                    hits.append((off + i + 8, va + i + 8))
+            i = blob.find(MRS, i + 1)
+
+    if not hits:
+        # Distinguish "already patched" from "moved in a new release" by
+        # looking for the same prologue with the load already neutralised.
+        for va, off, blob in segs:
+            i = blob.find(MRS)
+            while i != -1:
+                if i % 4 == 0 and i + 12 <= len(blob):
+                    b2, c2 = struct.unpack("<II", blob[i + 4:i + 12])
+                    if b2 == SUB_260 and c2 == MOV_X8_XZR:
+                        print("  already patched")
+                        return 0
+                i = blob.find(MRS, i + 1)
+        print("  no TCB-offset read found (new release?)")
+        return 0
 
     for foff, vaddr in hits:
         print(f"  {vaddr:#010x}  ldr x8,[x8] {LDR_X8_X8:#010x}"
@@ -122,27 +148,38 @@ def find_loads(f):
     return loads
 
 
-def patch_load_bias(f, loads, dry):
+def patch_load_bias(f, segs, dry):
     """Find the tag-scan loop by its shape and neutralise each csel."""
+    # `cmp x15, x11` is rare; find it with bytes.find (C speed) and check the
+    # two following words, rather than unpacking every word in a 210MB file.
+    CMP = struct.pack("<I", 0xEB0B01FF)   # cmp x15, x11
+    CSET = 0x1A9F37EF                     # cset w15, hs
     hits = []
-    for va, off, fsz in loads:
-        f.seek(off)
-        blob = f.read(fsz)
-        # Walk 4-byte aligned words looking for the cmp/cset/csel tail.
-        for i in range(0, len(blob) - 12, 4):
-            w_cmp, w_cset, w_csel = struct.unpack("<III", blob[i:i + 12])
-            # cmp x15, x11  = subs xzr, x15, x11
-            if w_cmp != 0xEB0B01FF:
-                continue
-            # cset w15, hs  = csinc w15, wzr, wzr, lo
-            if w_cset != 0x1A9F37EF:
-                continue
-            if not is_csel_lo(w_csel):
-                continue
-            d, n, m = decode_csel(w_csel)
-            hits.append((off + i + 8, va + i + 8, w_csel, d, n, m))
+    for va, off, blob in segs:
+        i = blob.find(CMP)
+        while i != -1:
+            if i % 4 == 0 and i + 12 <= len(blob):
+                w_cset, w_csel = struct.unpack("<II", blob[i + 4:i + 12])
+                if w_cset == CSET and is_csel_lo(w_csel):
+                    d, n, m = decode_csel(w_csel)
+                    hits.append((off + i + 8, va + i + 8, w_csel, d, n, m))
+            i = blob.find(CMP, i + 1)
 
     if not hits:
+        # Either already patched, or the code moved in a new release. Tell the
+        # two apart by looking for the movs this would have written.
+        done = 0
+        for va, off, blob in segs:
+            i = blob.find(CMP)
+            while i != -1:
+                if i % 4 == 0 and i + 12 <= len(blob):
+                    b2, c2 = struct.unpack("<II", blob[i + 4:i + 12])
+                    if b2 == CSET and (c2 & 0xFFE0FFE0) == 0xAA0003E0:
+                        done += 1
+                i = blob.find(CMP, i + 1)
+        if done:
+            print(f"  already patched ({done} site(s))")
+            return 0
         sys.exit("found no load-bias csel sites — has the binary changed?")
 
     for foff, vaddr, old, d, n, m in hits:
@@ -165,10 +202,11 @@ def main():
     mode = "rb" if dry else "r+b"
     with open(path, mode) as f:
         loads = find_loads(f)
+        segs = read_segments(f, loads)
         print("google_find_phdr load-bias sites:")
-        n = patch_load_bias(f, loads, dry)
+        n = patch_load_bias(f, segs, dry)
         print("glibc TCB-offset reads:")
-        n += patch_tcb_read(f, loads, dry)
+        n += patch_tcb_read(f, segs, dry)
 
     print(f"{'would patch' if dry else 'patched'} {n} instruction(s), {n * 4} bytes")
 
