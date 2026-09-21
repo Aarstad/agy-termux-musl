@@ -27,8 +27,12 @@ if [ "$DRY" = 1 ]; then
   echo "=== would create in $REPO ==="
   echo "title: $TITLE"
   echo
+  echo "--- first 20 lines of the body (preview only; the real run sends all"
+  echo "    $(printf '%s' "$BODY" | wc -l) lines / $(printf '%s' "$BODY" | wc -c) bytes) ---"
   echo "$BODY" | head -20
-  echo "  ... ($(printf '%s' "$BODY" | wc -l) lines total)"
+  echo "--- end of preview; $(( $(printf '%s' "$BODY" | wc -l) - 20 )) more lines follow in the real run ---"
+  echo
+  echo "To read the whole thing as it will be posted:  less UPSTREAM-REPORT.md"
   echo
   echo "=== would then comment on #9 (after confirmation) ==="
   echo "For anyone working on or past the TCMalloc issue: there is an independent"
