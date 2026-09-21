@@ -126,10 +126,9 @@ not established**.
 Hence the deliberately long `lib-…` directory name, and the length check in `agy` that
 refuses to run below 112. If you move this repo somewhere much shorter, it will break.
 
-**Verified:** a full interactive session. Model turns (Gemini 3.8 Flash, high effort),
-tool use (`Read`, `Bash`), multi-turn reasoning, streaming output, SQLite state, a
-completed OAuth login, and authenticated API calls. The agent reads files, runs commands
-and produces structured analysis exactly as it would on a supported platform.
+**Verified:** a full interactive session — model turns, tool use (`Read`, `Bash`),
+multi-turn reasoning, streaming output, SQLite state, a completed OAuth login and
+authenticated API calls.
 
 **Untested:** MCP servers, subagents, long-running sessions, and whether the
 path-length boundary can resurface under memory pressure.
