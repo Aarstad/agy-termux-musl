@@ -1,19 +1,26 @@
-# SIGSEGV in `google_find_phdr` during static initialization on non-prelinked PIE loaders (root cause for #9, relates to #64)
+# SIGSEGV in `google_find_phdr` under non-prelinking loaders: dynamic tag load-bias heuristic always selects the unrelocated value
 
 ## Summary
 
 `agy` crashes with `SIGSEGV` (`si_addr=0x5be0`) before reaching `main()` under any
-dynamic loader that does not hand it pre-relocated dynamic-section pointers — musl, and
-by the same mechanism the 39-bit-VA ARM64 kernel in #64.
+dynamic loader that does not hand it pre-relocated dynamic-section pointers, such as
+musl.
+
+**This is a separate bug from #9 and #64**, which are both TCMalloc's 48-bit virtual
+address assumption. That failure comes first — it aborts under glibc too, which is why
+#9 reproduces inside proot-distro Debian — and this one is only reachable once it is
+fixed. As far as I can tell it has not been reported: anyone still hitting TCMalloc
+never gets here, and anyone running a VA-patched build under glibc will not see it
+either. It needs both a VA-patched binary and a non-prelinking loader.
 
 The root cause is a **load-bias heuristic in `google_find_phdr`** that systematically
 selects the unrelocated value of dynamic pointer tags. It is not OS-specific and not a
 libc compatibility gap: it is an internal assumption that `DT_*` pointer tags arrive
 already absolute, which is only true in prelinked/glibc-style environments.
 
-Worth emphasising **#64** over the Android reports: that reproducer is an ASUSWRT-Merlin
-router running a stock ARM64 Linux kernel, with no Android or proot involved. This is a
-general correctness bug in PIE handling; Android is simply where it is most commonly hit.
+Like #64 — an ASUSWRT-Merlin router on a stock ARM64 Linux kernel, no Android or proot
+involved — this is not an Android-specific problem. It is a general correctness bug in
+PIE handling that happens to surface most often on platforms that are not glibc-shaped.
 
 Crash logs point at `process_state.cc` (Abseil's failure signal handler), which is
 misleading — that is the handler catching the fault and then faulting a second time while
@@ -53,13 +60,8 @@ value is a link-time offset needing `dlpi_addr` added, or an already-absolute ad
 
 The `lo` condition keeps the **raw** value when `(raw - 0x1000) <u 0xfffffffefffff001`.
 Because that bound is near the top of the unsigned 64-bit range, the comparison is true
-for essentially every realistic link-time offset:
-
-| raw | `raw - 0x1000` | keeps raw? |
-|---|---|---|
-| `0x5bd8` (this binary's `DT_GNU_HASH`) | `0x4bd8` | yes |
-| `0x100000` | `0xff000` | yes |
-| `0xf540000` | `0xf53f000` | yes |
+for essentially every realistic link-time offset: `0x5bd8` (this binary's
+`DT_GNU_HASH`), `0x100000` and `0xf540000` all keep the raw value.
 
 So the biased value is chosen only when the tag is *already* a high absolute address —
 the prelinked layout. For a standards-conforming PIE, every `d_ptr` is a relative virtual
@@ -144,8 +146,9 @@ Go's `crypto/x509` finds no CA bundle at any of its standard Linux paths.)
 Two further issues remain, so the patch above should be read as isolating one specific
 bug rather than as a complete fix:
 
-1. **TCMalloc's 48-bit VA assumption** (#9, #64) is independent and still applies; the
-   runs above used a separate patch for it.
+1. **TCMalloc's 48-bit VA assumption** (#9, #64) is the separate, earlier failure
+   described above; the runs here used an existing third-party patch for it. Nothing in
+   this report addresses it.
 2. **A path-length sensitivity.** After the `csel` fix the binary still faults before
    `main()` when the supporting library's resolved path is shorter than ~108 characters
    (sharp, deterministic threshold between 108 and 110). The fault is at `0x94e3538`:
