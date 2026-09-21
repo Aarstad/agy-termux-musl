@@ -130,9 +130,14 @@ glibc present:
 - `--version` and `--help` (full flag table)
 - subcommand dispatch — `models`, `mcp`, `update`
 - SQLite state initialization under `~/.gemini/antigravity-cli/`
-- OAuth flow start, including browser handoff
 - a real HTTPS round trip: `agy update` fetches the manifest and correctly reports
   "You are already on the latest version"
+- a **completed OAuth login**, and authenticated API calls afterwards: `agy models`
+  returns the live model list
+
+(Two further Android-specific fixes were needed to get that far, neither related to this
+bug: a DNS proxy, because musl finds no `/etc/resolv.conf`, and `SSL_CERT_FILE`, because
+Go's `crypto/x509` finds no CA bundle at any of its standard Linux paths.)
 
 ### Caveat: this is not the only problem
 

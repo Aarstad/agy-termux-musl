@@ -6,9 +6,15 @@ at musl, no glibc runtime) be applied to Google's Antigravity CLI?
 Tested on aarch64 Termux, Android, 39-bit VA kernel, against wallentx's
 patched `agy.va39` v1.2.7 engine.
 
-## Result: it runs
+## Result: it works, logged in
 
-    $ ./patched --version
+    $ agy models
+    Fetching available models...
+    gemini-3.8-flash-high	Gemini 3.8 Flash (High)
+    gemini-3.1-pro-high	Gemini 3.1 Pro (High)
+    ...
+
+    $ agy --version
     1.2.7
     $ ./patched --help
     Usage of patched:
@@ -80,6 +86,25 @@ Control, same command with the proxy vars unset:
 So the full chain is proven: musl-linked agy -> bionic-side proxy ->
 network. No glibc anywhere.
 
+### TLS: Go finds no CA bundle on Android
+
+Go's `crypto/x509` searches a fixed list of Linux CA-bundle paths
+(`/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`,
+`/etc/ssl/ca-bundle.pem`, `/etc/ssl/cert.pem`, `/etc/ssl/certs`). **None exist
+on Android.** Every TLS verification then fails:
+
+    tls: failed to verify certificate: x509: certificate signed by unknown authority
+    browser.go:133] consumerOAuth: token exchange failed
+
+This is what blocked login: the browser handshake completes, but the
+token-exchange POST cannot verify Google's certificate. Termux ships the bundle
+at `$PREFIX/etc/tls/cert.pem`, so the wrapper exports `SSL_CERT_FILE` and
+`SSL_CERT_DIR` (both honouring anything already set).
+
+Note the telemetry POSTs to `play.googleapis.com/log` fail with the same error
+every 5 seconds and are unrelated to whether login works — the line that matters
+is `browser.go consumerOAuth`.
+
 ### Path-length sensitivity — a second, unfixed bug
 
 The 20-byte `csel` patch is necessary but **not sufficient**. The patched binary
@@ -128,17 +153,17 @@ shorter path will break it.
 
 - `--version`, `--help`, subcommand dispatch (`models`, `update`, `mcp`)
 - `update`: real HTTPS round-trip to Google's manifest endpoint, correct answer
-- Auth flow starts and opens a browser (an Android intent, so Chrome resolves
-  with bionic — that part never needed the proxy)
+- **A completed OAuth login.** The browser handshake, the token-exchange POST
+  and the token write to `~/.gemini/antigravity-cli/antigravity-oauth-token` all
+  succeed once `SSL_CERT_FILE` is set.
+- **Authenticated API calls.** `agy models` returns the live model list from
+  Google's API — token, HTTPS, response parsing, all working.
 
 ### Not yet verified
 
-- **A completed login.** No OAuth token has been obtained, so nothing past the
-  handshake is tested: no session, no model calls, no tool use. agy looks for
-  `~/.gemini/antigravity-cli/antigravity-oauth-token` and short-circuits to
-  "Please sign in" *before* any network call when it is absent — so
-  `models` is not a network test, `update` is.
-- Long sessions, streaming, MCP, subagents.
+- Long sessions, streaming, MCP servers, subagents, tool use, actual model
+  turns. Everything up to and including authenticated API calls works; what a
+  real coding session does has not been exercised.
 
 ## What was established
 

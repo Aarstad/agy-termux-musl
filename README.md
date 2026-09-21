@@ -9,14 +9,16 @@ the other route: run it against musl, which needs a 723KB loader instead, and fi
 four things that break along the way.
 
 ```
-$ agy --version
-1.2.7
-$ agy update
-⟳ Checking for updates... (current version 1.2.7)
-✓ You are already on the latest version.
+$ agy models
+Fetching available models...
+gemini-3.8-flash-high	Gemini 3.8 Flash (High)
+gemini-3.1-pro-high	Gemini 3.1 Pro (High)
+...
 ```
 
-Nothing here redistributes Google's binary. `install.sh` downloads their published
+Logged in, authenticated, talking to Google's API from a phone.
+
+Nothing here redistributes Google's binary. `install.sh` takes their published
 release, applies **20 bytes** of patches, and builds a small shim beside it.
 
 ## What actually breaks, and why
@@ -124,9 +126,13 @@ not established**.
 Hence the deliberately long `lib-…` directory name, and the length check in `agy` that
 refuses to run below 112. If you move this repo somewhere much shorter, it will break.
 
-**Also untested:** long sessions, streaming, MCP servers, subagents, tool use. Verified so
-far: version, help, subcommand dispatch, SQLite state, a real HTTPS round trip, and the
-OAuth flow through token exchange.
+**Verified:** version, help, subcommand dispatch, SQLite state, HTTPS round trips, a
+completed OAuth login, and authenticated API calls (`agy models` returns the live model
+list).
+
+**Untested:** long sessions, streaming, MCP servers, subagents, tool use, actual model
+turns. Everything up to authenticated API calls works; what a real coding session does
+has not been exercised.
 
 ## Credits
 
