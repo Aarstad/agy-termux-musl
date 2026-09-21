@@ -132,12 +132,12 @@ None outstanding. The install path constraint that earlier versions carried is f
 see "glibc TCB offsets" below.
 
 
-**Verified:** a full interactive session — model turns, tool use (`Read`, `Bash`),
-multi-turn reasoning, streaming output, SQLite state, a completed OAuth login and
-authenticated API calls.
+**Verified:** everything the CLI does. Model turns, tool use (`Read`, `Bash`), multi-turn
+reasoning, streaming output, SQLite state, a completed OAuth login, authenticated API
+calls, **MCP servers** (an external server spawning `bun`, called via `CallMcpTool`) and
+**subagents** (full approval lifecycle across multiple steps). No errors.
 
-**Untested:** MCP servers, subagents, long-running sessions, and whether the
-path-length boundary can resurface under memory pressure.
+**Untested:** long-running sessions only.
 
 ## Credits
 

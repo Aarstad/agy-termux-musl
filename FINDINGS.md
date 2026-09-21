@@ -153,12 +153,12 @@ API call. The padded lib directory is gone.
 
 ### Not yet verified
 
-- MCP servers, subagents, long-running sessions, and whether the path-length
-  boundary can resurface under memory pressure.
+- Long-running sessions.
 
-A full interactive session works: model turns, tool use (`Read`, `Bash`),
-multi-turn reasoning and streaming output all behave as they would on a
-supported platform.
+Everything else works as it would on a supported platform: model turns, tool
+use (`Read`, `Bash`), multi-turn reasoning, streaming output, MCP servers (an
+external server spawning `bun`, invoked through `CallMcpTool`) and subagents
+(a full approval lifecycle over multiple steps, via `subagent_manager`).
 
 ## What was established
 

@@ -74,5 +74,6 @@ glibc's memory layout — one about prelinked dynamic-table pointers, one about 
 in the same component. It may be worth auditing it for others of the same shape.
 
 For what it is worth: with those two fixes, six instructions and 24 bytes in total, the
-stock 1.2.7 `linux_arm64` binary runs at full fidelity under musl on Android — full
-interactive sessions, tool use, authenticated API calls. Nothing else needed patching.
+stock 1.2.7 `linux_arm64` binary runs under musl on Android with no functional gaps I
+have found — interactive sessions, tool use, authenticated API calls, MCP servers and
+subagents all work. Nothing else needed patching.
