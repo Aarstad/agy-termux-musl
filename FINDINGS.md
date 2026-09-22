@@ -221,6 +221,26 @@ Only the wrapper reached by `mov x5,xzr; mov x6,xzr; movz x0,#439; bl` is
 rewritten. Four other `movz x0,#439` sites open functions nothing on this path
 calls; `agy.va39` leaves them alone too.
 
+**`proot` hides it, which is worth knowing before trusting a reproduction.**
+Natively the raw syscall is fatal; under `proot` it returns `ENOSYS`:
+
+    $ ./t439b                 # native
+    Unknown signal 31         # SIGSYS, killed at the faccessat2 call
+
+    $ proot ./t439b
+    faccessat2 (439): ret=-1 errno=38  Function not implemented
+    faccessat  (48):  ret=0
+
+`ENOSYS` is exactly what Go's `findExecutable` waits for, so under `proot` the
+fallback runs and nothing crashes. `proot` traces at the ptrace syscall-entry
+stop, which the kernel takes before evaluating the seccomp filter, so a syscall
+it does not implement never reaches the filter — not implementing 439
+accidentally produces the behaviour Go expects and the platform filter refuses.
+
+The practical consequence is inverted from the usual: this bug appears on a
+native install and disappears inside the sandbox. Anyone reproducing it inside
+`proot-distro` will conclude, wrongly, that it is not there.
+
 **musl needs only 10 symbols.** After rewriting DT_NEEDED (drop libresolv,
 libpthread, libm, libdl, librt; map libc.so.6 -> libc.musl-aarch64.so.1),
 the only unresolved symbols are:
