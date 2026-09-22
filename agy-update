@@ -1,0 +1,127 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# agy-update — update the musl build of Antigravity CLI that agy runs.
+#
+# agy's own updater is off (the agy wrapper sets AGY_CLI_DISABLE_AUTO_UPDATE=true)
+# because it drops a stock glibc build over this install and undoes every patch,
+# mid-session and without asking. This fetches Google's release deliberately,
+# hands it to install.sh to patch and verify, and keeps the old binary for
+# rollback.
+#
+#   agy-update              update to the latest published version
+#   agy-update --check      report versions, change nothing
+#   agy-update --force      reinstall even if already current
+#   agy-update --version X  install a specific version
+#   agy-update --rollback   restore the previous binary
+#   agy-update --no-backup  do not keep the previous binary (saves ~210MB)
+#
+# Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+BIN="$HERE/agy.bin"
+PREV="$HERE/agy.bin.prev"
+LIBDIR="$HERE/lib"
+REPO="google-antigravity/antigravity-cli"
+ASSET="agy_cli_linux_arm64.tar.gz"
+NEED_MB=600          # tarball + extracted copy + the patched build, with headroom
+
+CHECK=0; FORCE=0; WANT=""; BACKUP=1; ROLLBACK=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check)     CHECK=1 ;;
+    --force)     FORCE=1 ;;
+    --no-backup) BACKUP=0 ;;
+    --rollback)  ROLLBACK=1 ;;
+    --version)   shift; WANT="${1:?--version needs a value}" ;;
+    -h|--help)   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)           echo "agy-update: unknown option $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+die() { echo "agy-update: $*" >&2; exit 1; }
+
+command -v curl    >/dev/null || die "curl is required (pkg install curl)"
+command -v python3 >/dev/null || die "python3 is required (pkg install python)"
+[ -x "$HERE/install.sh" ] || die "install.sh is missing from $HERE"
+
+if [ "$ROLLBACK" = 1 ]; then
+  [ -f "$PREV" ] || die "no previous binary at $PREV"
+  mv -f "$PREV" "$BIN.rollback.$$" && mv -f "$BIN" "$PREV" \
+    && mv -f "$BIN.rollback.$$" "$BIN" || die "rollback failed"
+  echo "rolled back to $(env -u LD_PRELOAD LD_LIBRARY_PATH="$LIBDIR" "$BIN" --version 2>/dev/null || echo unknown)"
+  echo "(the version you rolled away from is kept at $PREV)"
+  exit 0
+fi
+
+# Read the installed version off the binary rather than through the wrapper:
+# the wrapper would repair a stock build first, which is the thing being replaced.
+current="$(env -u LD_PRELOAD LD_LIBRARY_PATH="$LIBDIR" "$BIN" --version 2>/dev/null | head -1 | tr -d '[:space:]')"
+[ -n "$current" ] || current="(none installed)"
+
+if [ -n "$WANT" ]; then
+  version="$WANT"
+else
+  meta="$(timeout 120 curl -sSL -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null)" \
+    || die "could not reach the GitHub API"
+  [ -n "$meta" ] || die "empty response from the GitHub API"
+  # 2>&1 so the reason travels in $version when this fails; a rate-limit reply
+  # is valid JSON with no tag_name, and would otherwise be a blank error.
+  version="$(printf '%s' "$meta" | python3 -c '
+import json, sys
+try:
+    j = json.load(sys.stdin)
+except Exception:
+    sys.exit("could not parse the GitHub response")
+tag = j.get("tag_name")
+if not tag:
+    sys.exit(j.get("message", "no tag_name in the response"))
+print(tag.lstrip("v"))
+' 2>&1)" || die "$version"
+fi
+[ -n "$version" ] || die "could not determine which version to install"
+
+echo "installed: $current"
+echo "available: $version"
+
+if [ "$CHECK" = 1 ]; then
+  [ "$current" = "$version" ] && echo "up to date." || echo "run without --check to update."
+  exit 0
+fi
+if [ "$current" = "$version" ] && [ "$FORCE" != 1 ]; then
+  echo "already current; use --force to reinstall."
+  exit 0
+fi
+
+avail_mb="$(df -Pm "$HERE" 2>/dev/null | awk 'NR==2{print $4}')"
+if [ -n "$avail_mb" ] && [ "$avail_mb" -lt "$NEED_MB" ]; then
+  die "need about ${NEED_MB}MB free, have ${avail_mb}MB"
+fi
+
+work="$(mktemp -d "$HERE/.update.XXXXXX")" || die "could not create a work directory"
+trap 'rm -rf "$work"' EXIT INT TERM
+
+url="https://github.com/$REPO/releases/download/$version/$ASSET"
+echo "downloading $version — about 53MB"
+if [ -t 2 ]; then PROG=--progress-bar; else PROG=--no-progress-meter; fi
+timeout 900 curl -fL $PROG --retry 3 --retry-delay 2 -o "$work/$ASSET" "$url" \
+  || die "could not download $url"
+tar xzf "$work/$ASSET" -C "$work" || die "could not unpack $ASSET"
+[ -f "$work/antigravity" ] || die "no 'antigravity' binary inside the tarball"
+
+# Keep the current build under a second name. install.sh replaces agy.bin with
+# a rename, so a hard link goes on pointing at the old inode -- no 200MB copy,
+# and nothing to undo if the update fails.
+if [ "$BACKUP" = 1 ] && [ -f "$BIN" ]; then
+  ln -f "$BIN" "$PREV" 2>/dev/null || cp -f "$BIN" "$PREV" \
+    || die "could not set the previous version aside"
+fi
+
+# install.sh patches, proves the result runs, and only then replaces agy.bin.
+"$HERE/install.sh" --from-binary "$work/antigravity" \
+  || die "install.sh could not patch $version; agy.bin is unchanged"
+
+if [ "$BACKUP" = 1 ] && [ -f "$PREV" ]; then
+  echo "previous kept at $PREV ($0 --rollback, or delete to save $(du -m "$PREV" | awk '{print $1}')MB)"
+fi

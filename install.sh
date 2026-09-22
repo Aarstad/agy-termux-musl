@@ -1,7 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Patch Google's Antigravity CLI to run natively in Termux, without glibc.
 #
-#   ./install.sh                 fetch and patch the default version
+#   ./install.sh                 fetch and patch the pinned default version
+#                                (agy-update follows the latest release instead)
 #   ./install.sh --version 1.2.7 pin a version
 #   ./install.sh --keep-download keep the downloaded tarball
 #   ./install.sh --from-binary F patch F instead of downloading (use this with

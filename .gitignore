@@ -1,4 +1,5 @@
-agy.bin
+agy.bin*
 dns-proxy
 *.tar.gz
 lib/*.so
+.update.*

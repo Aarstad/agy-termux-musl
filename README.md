@@ -58,6 +58,20 @@ Follow the browser prompt to sign in with your Google account. Once authenticate
 agy
 ```
 
+### 4. Keeping it up to date
+
+`agy`'s built-in auto-updater is off (see [Troubleshooting](#cannot-execute-required-file-not-found-on-launch)), so updates happen when you ask for them:
+
+```bash
+./agy-update --check      # compare installed against the latest release
+./agy-update              # fetch it, patch it, verify it, install it
+./agy-update --rollback   # go back to the previous binary
+```
+
+It resolves the newest release from GitHub, hands the binary to `install.sh` to patch and verify, and only replaces `agy.bin` once the patched build has been proven to run. The previous binary is kept as `agy.bin.prev` (a hard link, so it costs nothing until one of them changes); `--no-backup` skips it.
+
+`./install.sh` on its own installs a **pinned** version, not the latest — use `agy-update` unless you want a specific build.
+
 ---
 
 ## Installing the musl Loader
@@ -93,7 +107,7 @@ chmod +x "$PREFIX/lib/ld-musl-aarch64.so.1"
 The session that triggered the update keeps working, because the running process still holds the renamed inode (`/proc/<pid>/exe -> ...old`). Only the next start breaks.
 
 Two things in the `agy` wrapper deal with this:
-- **The updater is off by default.** The wrapper exports `AGY_CLI_DISABLE_AUTO_UPDATE=true`, which `agy` checks before spawning it (`auto_updater.go:247`). The value must be exactly `true` — the binary compares four bytes and ignores anything else, `1` included, without a word about it. The variable appears in no help output. Update deliberately with `./install.sh`, or allow it for a single run with `AGY_ALLOW_UPDATE=1`.
+- **The updater is off by default.** The wrapper exports `AGY_CLI_DISABLE_AUTO_UPDATE=true`, which `agy` checks before spawning it (`auto_updater.go:247`). The value must be exactly `true` — the binary compares four bytes and ignores anything else, `1` included, without a word about it. The variable appears in no help output. Update deliberately with [`./agy-update`](#4-keeping-it-up-to-date), or allow the built-in updater for a single run with `AGY_ALLOW_UPDATE=1`.
 - **If a stock build lands anyway**, the wrapper reads `PT_INTERP` before exec and re-runs `install.sh --from-binary` to put the patches back. Set `AGY_NO_REPAIR=1` to be told about it instead of repaired.
 
 The updater also deletes its own `.old` backups, so don't count on one being there. Keep a copy of a known-good binary if you want a fast way back.
