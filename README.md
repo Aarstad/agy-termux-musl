@@ -92,8 +92,11 @@ chmod +x "$PREFIX/lib/ld-musl-aarch64.so.1"
 
 The session that triggered the update keeps working, because the running process still holds the renamed inode (`/proc/<pid>/exe -> ...old`). Only the next start breaks.
 
-- **Fix**: none needed. The `agy` wrapper reads `PT_INTERP` before exec and, on finding a stock build, re-runs `install.sh --from-binary` to put the patches back. Set `AGY_NO_REPAIR=1` to be told about it instead of repaired.
-- The updater also deletes its own `.old` backups, so don't count on one being there. Keep a copy of a known-good binary if you want a fast way back.
+Two things in the `agy` wrapper deal with this:
+- **The updater is off by default.** The wrapper exports `AGY_CLI_DISABLE_AUTO_UPDATE=true`, which `agy` checks before spawning it (`auto_updater.go:247`). The value must be exactly `true` — the binary compares four bytes and ignores anything else, `1` included, without a word about it. The variable appears in no help output. Update deliberately with `./install.sh`, or allow it for a single run with `AGY_ALLOW_UPDATE=1`.
+- **If a stock build lands anyway**, the wrapper reads `PT_INTERP` before exec and re-runs `install.sh --from-binary` to put the patches back. Set `AGY_NO_REPAIR=1` to be told about it instead of repaired.
+
+The updater also deletes its own `.old` backups, so don't count on one being there. Keep a copy of a known-good binary if you want a fast way back.
 
 ### TCMalloc abort / "Memory mapping failed" on startup
 Android kernels typically configure a 39-bit virtual address space (`VA39`), whereas Google's stock bundled TCMalloc allocator assumes a 48-bit address space (`VA48`). wallentx's `agy.va39` engine retargets TCMalloc's address arithmetic.

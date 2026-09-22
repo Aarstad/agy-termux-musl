@@ -239,6 +239,51 @@ bionic and it fails on `__register_atfork`. Link against the musl loader
 directly: `cc -shared -fPIC -O2 -nostdlib -o libagyshim.so shim.c \
 $PREFIX/lib/ld-musl-aarch64.so.1`
 
+## The auto-updater, and the one switch that turns it off
+
+`third_party/jetski/cli/updater` spawns a background update process about a
+second into every session. When an update lands it renames `agy.bin` to
+`agy.bin.<unixnano>.old` and writes a stock Google build in its place, undoing
+every patch here. The session that triggered it keeps running on the renamed
+inode (`/proc/<pid>/exe -> ...old`), so the breakage only appears at the *next*
+launch. It deletes its own `.old` backups afterwards, so the fallback copy does
+not stay around either.
+
+Observed 2026-09-22: it fired at 18:37:42 and again at 19:58:19 — 80 minutes
+apart, the second time replacing a binary that had just been repaired by hand.
+
+**`AGY_CLI_DISABLE_AUTO_UPDATE=true` turns it off, and nothing else does.** The
+name is in the binary but in no help output, and the check is an exact
+four-byte comparison:
+
+    tbz  w0, #0, +12
+    adrp/add x0, "AGY_CLI_DISABLE_AUTO_UPDATE"
+    mov  x1, #27
+    bl   os.Getenv
+    cmp  x1, #4                       ; length must be exactly 4
+    ldr  w3, [x0]
+    mov  x4, #0x7274 ; movk #0x6575   ; 't','r','u','e'
+    cmp  w3, w4
+    cset x3, eq
+    tbnz w3, #0, +4184                ; taken -> skip the update trigger
+
+So `1`, `TRUE` and `yes` are accepted by the shell and ignored by the binary.
+Set correctly, the log says:
+
+    auto_updater.go:247] Auto-update disabled via environment variable
+                         AGY_CLI_DISABLE_AUTO_UPDATE
+
+There is no settings.json equivalent. `store.(*Manager)` carries accessors for
+the other settings (`GetAllowNonWorkspaceAccess`, `GetAutoExecutionPolicy`,
+`GetArtifactReviewMode`...) and none for updates.
+
+**Testing this needs care.** `updater.ttlStillFresh` short-circuits the spawn if
+the last check was under 15 minutes ago, logging `skipping update (fast path)`.
+Two runs back to back therefore both look like the variable worked. Remove
+`~/.gemini/antigravity-cli/last_check.timestamp` between runs, or the test
+measures nothing.
+
+
 ## Reproduce
 
     patchelf --set-interpreter $PREFIX/lib/ld-musl-aarch64.so.1 agy.va39

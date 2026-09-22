@@ -6,6 +6,7 @@
 #
 #   AGY_NO_PROXY=1   use ambient proxy settings instead of starting one
 #   AGY_NO_REPAIR=1  report a replaced agy.bin instead of repatching it
+#   AGY_ALLOW_UPDATE=1  let agy's background auto-updater run (off by default)
 #
 # Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
 set -euo pipefail
@@ -66,6 +67,18 @@ if [ "$(elf_interp "$BIN" || true)" != "$LOADER" ]; then
   # the patching fails, install.sh leaves agy.bin untouched and exits non-zero.
   AGY_NO_REPAIR=1 "$HERE/install.sh" --from-binary "$BIN" >&2 \
     || { echo "agy: could not repatch agy.bin" >&2; exit 1; }
+fi
+
+# ...and stop it happening again. agy checks this before spawning the updater:
+#
+#   auto_updater.go:247  Auto-update disabled via environment variable
+#                        AGY_CLI_DISABLE_AUTO_UPDATE
+#
+# The value must be exactly "true". The binary compares four bytes against
+# 0x65757274 and ignores everything else, "1" included, without saying so.
+# Update deliberately instead: ./install.sh, or AGY_ALLOW_UPDATE=1 for one run.
+if [ -z "${AGY_ALLOW_UPDATE:-}" ]; then
+  export AGY_CLI_DISABLE_AUTO_UPDATE="${AGY_CLI_DISABLE_AUTO_UPDATE:-true}"
 fi
 
 PROXY_PID=""
