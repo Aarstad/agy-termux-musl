@@ -241,6 +241,31 @@ The practical consequence is inverted from the usual: this bug appears on a
 native install and disappears inside the sandbox. Anyone reproducing it inside
 `proot-distro` will conclude, wrongly, that it is not there.
 
+**It is not a libc property.** Go issues this syscall itself. The number is a
+literal in Go code (`movz x0, #439`); `syscall.Syscall6` spills the arguments,
+puts it in `x8` and executes `svc #0`. No libc wrapper is consulted, so glibc,
+musl and bionic are interchangeable here. A freestanding test settles it —
+`-nostdlib -static`, zero `DT_NEEDED` entries, nothing but the raw `svc`:
+
+    $ ./t439raw            # native, no libc linked at all
+    Unknown signal 31      # SIGSYS
+    $ proot ./t439raw
+    (exit 0)
+
+The split is traced versus untraced, not one libc versus another.
+
+**So the glibc route is affected identically.** wallentx's twin-binary design
+runs the engine against `$PREFIX/glibc/lib/ld-linux-aarch64.so.1`, which
+changes nothing about syscall 439. That build escapes the crash only because
+`agy.va39` already carries the faccessat2 patch — a glibc install of a *stock*
+Google binary dies exactly as a musl one does.
+
+(Termux's glibc package is not installed here, so that last case rests on the
+freestanding test and the disassembly rather than on running it. Glibc's own
+`faccessat()` does try 439 first and fall back on `ENOSYS`, so it would trip
+the same trap if anything called it — but nothing does, because Go never gets
+that far.)
+
 **musl needs only 10 symbols.** After rewriting DT_NEEDED (drop libresolv,
 libpthread, libm, libdl, librt; map libc.so.6 -> libc.musl-aarch64.so.1),
 the only unresolved symbols are:
