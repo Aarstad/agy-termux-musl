@@ -30,23 +30,33 @@ PROXY_PID=""
 cleanup() { [ -n "${PROXY_PID:-}" ] && kill "$PROXY_PID" 2>/dev/null; return 0; }
 trap cleanup EXIT HUP INT TERM
 
-if [ -z "${AGY_NO_PROXY:-}" ] && [ -x "$PROXY" ]; then
-  # The proxy prints its port on stdout then serves until killed.
-  FIFO="$(mktemp -u "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/agy-proxy.XXXXXX")"
-  if mkfifo "$FIFO" 2>/dev/null; then
-    "$PROXY" > "$FIFO" 2>/dev/null &
-    PROXY_PID=$!
-    read -r -t 15 PORT < "$FIFO" || true
-    rm -f "$FIFO"
-    if [ -n "${PORT:-}" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
-      export http_proxy="http://127.0.0.1:$PORT"
-      export https_proxy="$http_proxy"
-      export HTTP_PROXY="$http_proxy"
-      export HTTPS_PROXY="$http_proxy"
-      export all_proxy="$http_proxy"
-    else
-      PROXY_PID=""
-      echo "agy: DNS proxy did not start; network will not work" >&2
+if [ -z "${AGY_NO_PROXY:-}" ]; then
+  if [ -n "${HTTP_PROXY:-${http_proxy:-}}" ]; then
+    : # Ambient proxy already configured
+  elif nc -z 127.0.0.1 18080 2>/dev/null; then
+    export http_proxy="http://127.0.0.1:18080"
+    export https_proxy="$http_proxy"
+    export HTTP_PROXY="$http_proxy"
+    export HTTPS_PROXY="$http_proxy"
+    export all_proxy="$http_proxy"
+  elif [ -x "$PROXY" ]; then
+    # The proxy prints its port on stdout then serves until killed.
+    FIFO="$(mktemp -u "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/agy-proxy.XXXXXX")"
+    if mkfifo "$FIFO" 2>/dev/null; then
+      "$PROXY" > "$FIFO" 2>/dev/null &
+      PROXY_PID=$!
+      read -r -t 15 PORT < "$FIFO" || true
+      rm -f "$FIFO"
+      if [ -n "${PORT:-}" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
+        export http_proxy="http://127.0.0.1:$PORT"
+        export https_proxy="$http_proxy"
+        export HTTP_PROXY="$http_proxy"
+        export HTTPS_PROXY="$http_proxy"
+        export all_proxy="$http_proxy"
+      else
+        PROXY_PID=""
+        echo "agy: DNS proxy did not start; network will not work" >&2
+      fi
     fi
   fi
 fi
