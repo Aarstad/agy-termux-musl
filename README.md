@@ -96,9 +96,10 @@ The session that triggered the update keeps working, because the running process
 - The updater also deletes its own `.old` backups, so don't count on one being there. Keep a copy of a known-good binary if you want a fast way back.
 
 ### TCMalloc abort / "Memory mapping failed" on startup
-Android kernels typically configure a 39-bit virtual address space (`VA39`), whereas Google's stock bundled TCMalloc allocator assumes a 48-bit address space (`VA48`). wallentx's `agy.va39` engine retargets TCMalloc's address arithmetic, and `install.sh` refuses to patch a stock binary on a 39-bit kernel rather than hand you one that aborts.
+Android kernels typically configure a 39-bit virtual address space (`VA39`), whereas Google's stock bundled TCMalloc allocator assumes a 48-bit address space (`VA48`). wallentx's `agy.va39` engine retargets TCMalloc's address arithmetic.
 - **Fix**: Ensure you pass `--from-binary agy.va39` during installation as shown in the install steps.
-- **Caveat (measured 2026-09-22)**: on one confirmed VA39 device (Android 16, aarch64 — `mmap` hints honoured at 2^38, refused at 2^39), stock Google **1.2.7 and 1.2.8 both start and complete real model turns with TCMalloc completely untouched**. The abort did not reproduce. It may still bite under heavier memory pressure than was tested, so the guard stays — but if no `agy.va39` exists for your version, `./install.sh --from-binary <stock binary>` is worth trying.
+- `install.sh` does not refuse to patch a stock binary on a 39-bit kernel. It warns, then **runs the patched binary before installing it**: if it cannot start, `agy.bin` is left exactly as it was and the error points you here. The check is empirical, so it is correct on any device rather than only the one it was written on — and the wrapper's self-repair, which patches whatever stock build the updater left behind, runs through the same gate.
+- **Measured 2026-09-22**: on one confirmed VA39 device (Android 16, aarch64 — `mmap` hints honoured at 2^38, refused at 2^39), stock Google **1.2.7 and 1.2.8 both start and complete real model turns with TCMalloc completely untouched**. The abort did not reproduce. It may still bite under heavier memory pressure than was tested, which is why the warning stays.
 
 ### Network hangs or TLS certificate errors
 Android lacks standard Linux paths like `/etc/resolv.conf` and `/etc/ssl/certs/ca-certificates.crt`.

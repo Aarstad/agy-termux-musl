@@ -184,9 +184,15 @@ stock release. `patch.py` now implements it directly.
 device (Android 16, aarch64; `mmap` hints honoured at 2^38, refused at 2^39):
 stock Google 1.2.7 *and* 1.2.8 both start and complete real model turns with
 TCMalloc untouched, given only the three patches in `patch.py`. No abort, no
-"Memory mapping failed". Not stress-tested under memory pressure, so
-`install.sh`'s VA39 guard stays — but the premise is unverified on current
-releases.
+"Memory mapping failed". Not stress-tested under memory pressure, so the
+premise is unverified rather than disproved.
+
+`install.sh` therefore warns instead of refusing, and decides empirically: the
+patched binary is run before it replaces `agy.bin`, and nothing is installed if
+it cannot start. That is right on any device, unlike a heuristic that only
+knows where the stack landed and never looks at the binary — and it is the same
+gate the wrapper's self-repair goes through when it patches whatever stock
+build the updater left behind.
 
 ## Android's seccomp filter kills `faccessat2`
 
