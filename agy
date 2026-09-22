@@ -5,6 +5,7 @@
 # DNS inside the process is dead) and points agy at it, then runs the binary.
 #
 #   AGY_NO_PROXY=1   use ambient proxy settings instead of starting one
+#   AGY_NO_REPAIR=1  report a replaced agy.bin instead of repatching it
 #
 # Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
 set -euo pipefail
@@ -25,6 +26,46 @@ LIBDIR="$HERE/lib"
 [ -x "$BIN" ] || { echo "agy: $BIN is missing" >&2; exit 1; }
 [ -e "$LIBDIR/libagyshim.so" ] || { echo "agy: shim missing from $LIBDIR" >&2; exit 1; }
 
+: "${PREFIX:=/data/data/com.termux/files/usr}"
+LOADER="$PREFIX/lib/ld-musl-aarch64.so.1"
+
+# Read PT_INTERP out of the ELF. patchelf moves it into a segment of its own at
+# the end of the file, so there is no fixed place to look for it.
+elf_interp() {
+  local f="$1" phoff phentsize phnum words i base lo hi off sz
+  [ "$(od -An -tx1 -N4 "$f" | tr -d ' ')" = "7f454c46" ] || return 1
+  phoff="$(od -An -tu8 -j32 -N8 -v "$f" | tr -d ' ')"
+  read -r phentsize phnum < <(od -An -tu2 -j54 -N4 -v "$f")
+  words=($(od -An -tu4 -j"$phoff" -N"$((phentsize * phnum))" -v "$f"))
+  for ((i = 0; i < phnum; i++)); do
+    base=$((i * phentsize / 4))
+    [ "${words[base]}" = 3 ] || continue          # PT_INTERP
+    lo="${words[base + 2]}"; hi="${words[base + 3]}"
+    off=$((hi * 4294967296 + lo)); sz="${words[base + 8]}"
+    dd if="$f" bs=1 skip="$off" count="$sz" 2>/dev/null | tr -d "\0"
+    return 0
+  done
+  return 1
+}
+
+# agy updates itself in the background: it renames agy.bin to
+# agy.bin.<nanos>.old and writes a stock Google build in its place, undoing
+# every patch install.sh applied. That build asks for glibc's loader, which
+# Android does not have, and the only thing the user sees is "cannot execute:
+# required file not found". Catch it here, where the cause can be named.
+if [ "$(elf_interp "$BIN" || true)" != "$LOADER" ]; then
+  echo "agy: agy.bin is not linked against musl -- the auto-updater has" >&2
+  echo "     replaced it with a stock build." >&2
+  if [ -n "${AGY_NO_REPAIR:-}" ] || [ ! -x "$HERE/install.sh" ]; then
+    echo "     Repatch it with: $HERE/install.sh --from-binary $BIN" >&2
+    exit 1
+  fi
+  echo "agy: re-applying the patches to the new version..." >&2
+  # AGY_NO_REPAIR stops install.sh's closing `agy --version` from recursing
+  # back into this branch if the patching did not in fact take.
+  AGY_NO_REPAIR=1 "$HERE/install.sh" --from-binary "$BIN" >&2 \
+    || { echo "agy: could not repatch agy.bin" >&2; exit 1; }
+fi
 
 PROXY_PID=""
 cleanup() { [ -n "${PROXY_PID:-}" ] && kill "$PROXY_PID" 2>/dev/null; return 0; }
@@ -66,7 +107,6 @@ fi
 # every TLS verification fails with "certificate signed by unknown authority" --
 # including the OAuth token-exchange POST, which makes login impossible. Termux
 # ships the bundle at $PREFIX/etc/tls/cert.pem; point Go at it.
-: "${PREFIX:=/data/data/com.termux/files/usr}"
 if [ -z "${SSL_CERT_FILE:-}" ] && [ -r "$PREFIX/etc/tls/cert.pem" ]; then
   export SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"
 fi

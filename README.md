@@ -87,9 +87,18 @@ chmod +x "$PREFIX/lib/ld-musl-aarch64.so.1"
 
 ## Troubleshooting & FAQ
 
+### `cannot execute: required file not found` on launch
+`agy` spawns a background auto-updater about a second into **every** session. When an update lands, it renames `agy.bin` to `agy.bin.<nanos>.old` and writes a stock Google build in its place, undoing every patch applied here. The stock build asks for glibc's loader, which Android does not have — so the *next* launch fails with this message, often hours later and with nothing on screen connecting the two.
+
+The session that triggered the update keeps working, because the running process still holds the renamed inode (`/proc/<pid>/exe -> ...old`). Only the next start breaks.
+
+- **Fix**: none needed. The `agy` wrapper reads `PT_INTERP` before exec and, on finding a stock build, re-runs `install.sh --from-binary` to put the patches back. Set `AGY_NO_REPAIR=1` to be told about it instead of repaired.
+- The updater also deletes its own `.old` backups, so don't count on one being there. Keep a copy of a known-good binary if you want a fast way back.
+
 ### TCMalloc abort / "Memory mapping failed" on startup
-Android kernels typically configure a 39-bit virtual address space (`VA39`), whereas Google's stock bundled TCMalloc allocator assumes a 48-bit address space (`VA48`).
-- **Fix**: Ensure you pass `--from-binary agy.va39` during installation as shown in the install steps. Running `./install.sh` on stock unpatched Google binaries will trigger TCMalloc aborts on 39-bit VA devices.
+Android kernels typically configure a 39-bit virtual address space (`VA39`), whereas Google's stock bundled TCMalloc allocator assumes a 48-bit address space (`VA48`). wallentx's `agy.va39` engine retargets TCMalloc's address arithmetic, and `install.sh` refuses to patch a stock binary on a 39-bit kernel rather than hand you one that aborts.
+- **Fix**: Ensure you pass `--from-binary agy.va39` during installation as shown in the install steps.
+- **Caveat (measured 2026-09-22)**: on one confirmed VA39 device (Android 16, aarch64 — `mmap` hints honoured at 2^38, refused at 2^39), stock Google **1.2.7 and 1.2.8 both start and complete real model turns with TCMalloc completely untouched**. The abort did not reproduce. It may still bite under heavier memory pressure than was tested, so the guard stays — but if no `agy.va39` exists for your version, `./install.sh --from-binary <stock binary>` is worth trying.
 
 ### Network hangs or TLS certificate errors
 Android lacks standard Linux paths like `/etc/resolv.conf` and `/etc/ssl/certs/ca-certificates.crt`.
@@ -101,7 +110,7 @@ Android lacks standard Linux paths like `/etc/resolv.conf` and `/etc/ssl/certs/c
 
 ## How It Works (Under the Hood)
 
-For the curious: Google distributes `agy` as a glibc-linked dynamic PIE executable. Making it run on Android under musl required solving four distinct hurdles:
+For the curious: Google distributes `agy` as a glibc-linked dynamic PIE executable. Making it run on Android under musl required solving five distinct hurdles:
 
 1. **glibc to musl Loader & Shim (`shim.c`)**:
    The ELF interpreter is repointed to `ld-musl-aarch64.so.1`. A tiny 40-line C shim (`lib/libagyshim.so`) provides missing glibc symbols (`__open`, `__close`, `__read`, `pvalloc`, pthread cancellation stubs).
@@ -109,7 +118,9 @@ For the curious: Google distributes `agy` as a glibc-linked dynamic PIE executab
    The internal binary function `google_find_phdr` miscalculated load biases under non-prelinking loaders due to an unsigned 64-bit comparison against `0xfffffffefffff001`. Replacing 5 conditional selects (`csel`) with unconditional moves (`mov`) fixes the crash at startup (20 bytes patched).
 3. **Thread-Control-Block (TCB) Fallback (`patch.py`)**:
    Glibc reserves several hundred bytes below the thread pointer (`[tp - 0x260]`). Musl has a smaller TCB, causing segfaults on unmapped memory. Forcing the check to zero routes execution into Google's built-in global fallback path (4 bytes patched).
-4. **Android DNS & TLS Integration (`dns-proxy.c` / `termux-dns-proxy`)**:
+4. **seccomp-blocked `faccessat2` (`patch.py`)**:
+   Go's `os/exec.LookPath` calls `unix.Eaccess` on any candidate that exists, which issues syscall 439. Android's seccomp filter answers an unknown syscall number with `SIGSYS` rather than `ENOSYS`, so Go never reaches its permission-bit fallback — the CLI dies in `clipboard` package init, before `main()`, from the moment `termux-clipboard-get` is on `$PATH`. The number in the `syscall.faccessat2` wrapper is rewritten to 48, plain `faccessat`, which the filter allows (4 bytes patched).
+5. **Android DNS & TLS Integration (`dns-proxy.c` / `termux-dns-proxy`)**:
    A lightweight, single-threaded `epoll` + `splice(2)` proxy bridges network lookups to Android's bionic resolver, while Termux's certificate bundle provides trusted root CAs. Can run as a shared background service (`termux-dns-proxy`) across all musl tools.
 
 Detailed analysis, disassembly traces, and offset tables are documented in [FINDINGS.md](file:///data/data/com.termux/files/home/projects/agy-termux-musl/FINDINGS.md).
@@ -120,7 +131,7 @@ Detailed analysis, disassembly traces, and offset tables are documented in [FIND
 
 - **[claude-code-termux-musl](https://github.com/Aarstad/claude-code-termux-musl)** — Claude Code on Termux via musl.
 - **[codex-termux](https://github.com/Aarstad/codex-termux)** — OpenAI Codex CLI on Termux.
-- **[wallentx/antigravity-cli-termux](https://github.com/wallentx/antigravity-cli-termux)** — The pioneer project that discovered the TCMalloc VA39 patch and proved running `agy` on Termux was possible.
+- **[wallentx/antigravity-cli-termux](https://github.com/wallentx/antigravity-cli-termux)** — The pioneer project that discovered the TCMalloc VA39 patch and proved running `agy` on Termux was possible. Its `agy.va39` also quietly carried the `faccessat2` fix — 1 of the 41 instructions it changes — which this repo depended on without knowing until it implemented the patch itself.
 
 ## License
 

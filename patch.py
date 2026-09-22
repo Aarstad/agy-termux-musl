@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Patch Google's Antigravity CLI binary to run under musl on Android.
 
-Two in-place fixes; neither changes the file size.
+Three in-place fixes; none of them changes the file size.
 
 1. google_find_phdr load bias. The tag-scan loop decides, per dynamic pointer tag,
 whether the value needs the load bias added:
@@ -26,6 +26,16 @@ The cmp/cset are left alone: w15 is read later by the caller.
    thread pointer lands relative to its mapping, which is why it tracked the
    length of unrelated paths. The code already branches on that value being
    zero and falls back to reading globals, so the load is forced to zero.
+
+3. A faccessat2(2) that Android answers with SIGSYS. Go's os/exec.LookPath
+calls unix.Eaccess on every candidate that exists, which issues syscall 439.
+Android's seccomp filter does not know that number and kills the process rather
+than returning ENOSYS, so Go never reaches its permission-bit fallback -- the
+CLI dies in clipboard package init, before main(), as soon as
+termux-clipboard-get is on $PATH. Rewriting the number in the syscall.faccessat2
+wrapper to 48 takes plain faccessat, which the filter allows. faccessat has no
+flags argument, so AT_EACCESS is dropped; for a single-uid app that is the same
+answer.
 
 This does NOT patch TCMalloc's 48-bit virtual-address assumption, which aborts
 before main() on the 39-bit-VA kernels most Android devices use. That is a
@@ -62,6 +72,19 @@ MRS_TPIDR = 0xD53BD049  # mrs x9, tpidr_el0
 SUB_260   = 0xD1098128  # sub x8, x9, #0x260
 LDR_X8_X8 = 0xF9400108  # ldr x8, [x8]
 MOV_X8_XZR = 0xAA1F03E8  # mov x8, xzr
+
+# The faccessat2 wrapper: `mov x5,xzr; mov x6,xzr; movz x0,#439; bl Syscall6`.
+MOV_X5_XZR = 0xAA1F03E5
+MOV_X6_XZR = 0xAA1F03E6
+SYS_FACCESSAT2 = 439
+SYS_FACCESSAT = 48
+BL_MASK = 0xFC000000
+BL_OP = 0x94000000
+
+
+def movz_x0(imm):
+    """MOVZ X0, #imm — how Go loads a syscall number before calling Syscall6."""
+    return 0xD2800000 | (imm << 5)
 
 
 def read_segments(f, loads):
@@ -125,6 +148,65 @@ def patch_tcb_read(f, segs, dry):
         if not dry:
             f.seek(foff)
             f.write(struct.pack("<I", MOV_X8_XZR))
+    return len(hits)
+
+
+def patch_faccessat2(f, segs, dry):
+    """Retarget the faccessat2 syscall at faccessat, which seccomp allows.
+
+    Go's os/exec.findExecutable calls unix.Eaccess on any candidate that
+    exists, and on linux/arm64 that is syscall 439:
+
+        mov  x5, xzr
+        mov  x6, xzr
+        movz x0, #439          <- syscall.faccessat2
+        bl   syscall.Syscall6
+
+    Android's seccomp filter answers an unknown number with SIGSYS instead of
+    ENOSYS, so the process dies where Go expected to fall back to the
+    permission bits. Nothing on the path is at fault and the traceback names
+    none of it: the CLI simply dies in clipboard package init, before main(),
+    from the moment termux-clipboard-get exists on $PATH.
+
+    Only the wrapper with this shape is rewritten. The binary carries four more
+    `movz x0, #439` sites, each opening a function nothing here reaches; the
+    engine this port was built from leaves those alone too, and so does this,
+    rather than silently dropping a flags argument faccessat does not take.
+    """
+    shape = struct.pack("<II", MOV_X5_XZR, MOV_X6_XZR)
+
+    def sites(nr):
+        """Every `movz x0, #nr` that the two movs lead into and a bl leaves."""
+        want = struct.pack("<I", movz_x0(nr))
+        out = []
+        for va, off, blob in segs:
+            i = blob.find(want)
+            while i != -1:
+                if i % 4 == 0 and i >= 8 and i + 8 <= len(blob):
+                    nxt = struct.unpack("<I", blob[i + 4:i + 8])[0]
+                    if blob[i - 8:i] == shape and (nxt & BL_MASK) == BL_OP:
+                        out.append((off + i, va + i))
+                i = blob.find(want, i + 1)
+        return out
+
+    hits = sites(SYS_FACCESSAT2)
+    if not hits:
+        # Same wrapper, number already rewritten, versus the wrapper having
+        # moved or changed shape in a new release.
+        if sites(SYS_FACCESSAT):
+            print("  already patched")
+        else:
+            print("  no faccessat2 wrapper found (new release?)")
+        return 0
+
+    new = movz_x0(SYS_FACCESSAT)
+    for foff, vaddr in hits:
+        print(f"  {vaddr:#010x}  movz x0,#{SYS_FACCESSAT2}"
+              f" {movz_x0(SYS_FACCESSAT2):#010x}"
+              f" -> movz x0,#{SYS_FACCESSAT} {new:#010x}")
+        if not dry:
+            f.seek(foff)
+            f.write(struct.pack("<I", new))
     return len(hits)
 
 
@@ -207,6 +289,8 @@ def main():
         n = patch_load_bias(f, segs, dry)
         print("glibc TCB-offset reads:")
         n += patch_tcb_read(f, segs, dry)
+        print("seccomp-blocked faccessat2:")
+        n += patch_faccessat2(f, segs, dry)
 
     print(f"{'would patch' if dry else 'patched'} {n} instruction(s), {n * 4} bytes")
 

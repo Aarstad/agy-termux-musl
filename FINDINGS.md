@@ -167,9 +167,53 @@ bionic C bootstrapper (`agy`) that clears LD_PRELOAD and execs the engine
 (`agy.va39`) against `$PREFIX/glibc/lib/ld-linux-aarch64.so.1`. It needs
 Termux's full glibc package (~450MB).
 
-**The VA39 fix is only 82 bytes.** `cmp -l agy.va39 <google stock>` shows 82
-changed bytes, same file size — an in-place patch of TCMalloc's 48-bit address
-assumption, not a rebuild. Reusable independently.
+**The VA39 fix is only 82 bytes — and one of them is not TCMalloc.**
+`cmp -l agy.va39 <google stock 1.2.7>` shows 82 changed bytes across 41
+instructions, same file size: an in-place patch, not a rebuild. Disassembled,
+40 of the 41 are TCMalloc address arithmetic — shifts `#42`->`#35` and
+`#10`->`#3`, constants `2^42`->`2^35` and `2^44`->`2^37`, and the page-map top
+bit `movk x9,#1,lsl #48` -> `lsl x9,x9,#39`.
+
+The 41st, at file offset `0x68260c4`, is `mov x0,#439` -> `mov x0,#48`: the
+faccessat2 fix below, nothing to do with the address space. Because it rode
+inside a patch everyone called "the VA39 fix", this repo consumed it for months
+without knowing it existed — and could not rebuild a working binary from a
+stock release. `patch.py` now implements it directly.
+
+**The TCMalloc 40 may not be needed.** Measured 2026-09-22 on a confirmed VA39
+device (Android 16, aarch64; `mmap` hints honoured at 2^38, refused at 2^39):
+stock Google 1.2.7 *and* 1.2.8 both start and complete real model turns with
+TCMalloc untouched, given only the three patches in `patch.py`. No abort, no
+"Memory mapping failed". Not stress-tested under memory pressure, so
+`install.sh`'s VA39 guard stays — but the premise is unverified on current
+releases.
+
+## Android's seccomp filter kills `faccessat2`
+
+Syscall 439 is not in the filter's allowlist, and Android answers it with
+**SIGSYS (signal 31)** rather than `ENOSYS`. Confirmed independently of `agy`:
+
+    long r = syscall(439, -100, "/system/bin/sh", 1, 0x200);   /* dies, signal 31 */
+    long r = syscall(48,  -100, "/system/bin/sh", 1);          /* fine */
+
+Go's `os/exec.findExecutable` calls `unix.Eaccess` on a candidate that exists,
+and only falls back to permission bits on `ENOSYS` — which never arrives. The
+CLI dies before `main()`:
+
+    SIGSYS: bad system call
+    syscall.Syscall6(0x1b7, ...)                 <- 0x1b7 = 439
+    os/exec.lookPath({..., 0x14})                <- LookPath("termux-clipboard-get")
+    clipboard.init.0()
+
+It only bites once `termux-clipboard-get` exists on `$PATH`, which is why it
+looks intermittent across devices. Rewriting the number in the
+`syscall.faccessat2` wrapper to 48 takes plain `faccessat`, which the filter
+allows; `faccessat` has no flags argument, so `AT_EACCESS` is dropped — for a
+single-uid app, the same answer.
+
+Only the wrapper reached by `mov x5,xzr; mov x6,xzr; movz x0,#439; bl` is
+rewritten. Four other `movz x0,#439` sites open functions nothing on this path
+calls; `agy.va39` leaves them alone too.
 
 **musl needs only 10 symbols.** After rewriting DT_NEEDED (drop libresolv,
 libpthread, libm, libdl, librt; map libc.so.6 -> libc.musl-aarch64.so.1),
