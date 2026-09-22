@@ -85,7 +85,7 @@ involved.
 inside the process hangs rather than failing. A small proxy runs on the bionic side, where
 DNS works, and `agy` tunnels through it via `HTTPS_PROXY`. This is
 [claude-code-termux-musl](https://github.com/Aarstad/claude-code-termux-musl)'s
-`dns-proxy.c` unchanged — a single-threaded `epoll` + `splice(2)` tunnel, ~2.8MB resident.
+`dns-proxy.c` — a single-threaded `epoll` + `splice(2)` tunnel, ~2.8MB resident.
 
 **4. TLS certificates.** Go's `crypto/x509` looks for a CA bundle at
 `/etc/ssl/certs/ca-certificates.crt` and four other standard paths. **None exist on
@@ -140,6 +140,13 @@ calls, **MCP servers** (an external server spawning `bun`, called via `CallMcpTo
 **subagents** (full approval lifecycle across multiple steps). No errors.
 
 **Untested:** long-running sessions only.
+
+## Related
+
+Same approach, other AI CLIs on Android:
+
+- **[claude-code-termux-musl](https://github.com/Aarstad/claude-code-termux-musl)** — Claude Code, and the musl loader and DNS proxy this repo builds on
+- **[codex-termux](https://github.com/Aarstad/codex-termux)** — OpenAI's Codex CLI
 
 ## Credits
 
