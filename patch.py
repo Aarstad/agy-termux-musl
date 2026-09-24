@@ -45,7 +45,7 @@ Sites are found by opcode pattern, not by hardcoded offsets, so a new release
 that moves the code still patches. Run with --dry-run to see what would change.
 
 Only executable code is searched: the PT_LOAD segments with PF_X, of the
-binary itself and of every ELF embedded in it. Since at least 1.2.8 the binary
+binary itself and of every ELF embedded in it. Since at least 1.2.7 the binary
 carries two helper executables as data (a ripgrep with the same TCMalloc/Abseil
 code, and a Go webm_encoder that agy extracts to ~/.gemini/antigravity-cli/bin/).
 They sit in the outer binary's RW segment, so a PF_X filter on the outer

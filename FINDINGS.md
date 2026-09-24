@@ -430,7 +430,7 @@ only the addresses move. `patch.py --dry-run` on Google's stock binaries
 | TCB read (#1079) | `0x94e3538` | `0x9073b58` | `0x90c09f8` | `0x9148ad8` |
 | `faccessat2` | — | `0x653b004` | `0x6569064` | `0x65b5024` |
 
-### Two embedded helper executables, since at least 1.2.8
+### Two embedded helper executables, since at least 1.2.7
 
 The binary carries two more aarch64 ELFs as data in its RW segment, and both
 inherit bugs from the list above. Their offsets in the outer file:
