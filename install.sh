@@ -102,6 +102,9 @@ for n in libresolv.so.2 libpthread.so.0 libm.so.6 libdl.so.2 librt.so.1; do
   patchelf --remove-needed "$n" "$NEW" 2>/dev/null || true
 done
 patchelf --replace-needed libc.so.6 libc.musl-aarch64.so.1 "$NEW"
+# The shim lives in lib/ next to the binary; $ORIGIN makes the binary find it
+# on its own, so nothing needs LD_LIBRARY_PATH to run agy.bin.
+patchelf --set-rpath '$ORIGIN/lib' "$NEW"
 
 # --- shim --------------------------------------------------------------------
 # Ten glibc-only symbols musl does not provide. Built against the musl loader,
@@ -118,9 +121,10 @@ patchelf --add-needed libagyshim.so "$NEW"
 # here too.
 #
 # $NEW is run directly rather than through the agy wrapper: the wrapper would
-# test whatever agy.bin is right now, which is the binary being replaced.
+# test whatever agy.bin is right now, which is the binary being replaced. No
+# LD_LIBRARY_PATH: the rpath set above has to be enough, and this proves it.
 say "checking that the patched binary runs"
-v="$(env -u LD_PRELOAD LD_LIBRARY_PATH="$LIBDIR" "$NEW" --version 2>&1 || true)"
+v="$(env -u LD_PRELOAD "$NEW" --version 2>&1 || true)"
 case "$v" in
   *[0-9].[0-9]*) ;;
   *) die "the patched binary did not report a version (said: ${v:-nothing})

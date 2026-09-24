@@ -129,8 +129,6 @@ fi
 # Termux preloads a bionic library that a musl process cannot relocate.
 unset LD_PRELOAD
 
-export LD_LIBRARY_PATH="$LIBDIR"
-
 # Deliberately not exec: the EXIT trap is what stops the proxy, and exec would
 # replace this shell and orphan it. One idle shell buys deterministic cleanup.
 "$BIN" "$@"
