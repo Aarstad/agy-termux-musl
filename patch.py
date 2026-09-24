@@ -43,6 +43,15 @@ runs the result before installing it in case a future release changes that.
 
 Sites are found by opcode pattern, not by hardcoded offsets, so a new release
 that moves the code still patches. Run with --dry-run to see what would change.
+
+Only executable code is searched: the PT_LOAD segments with PF_X, of the
+binary itself and of every ELF embedded in it. Since at least 1.2.8 the binary
+carries two helper executables as data (a ripgrep with the same TCMalloc/Abseil
+code, and a Go webm_encoder that agy extracts to ~/.gemini/antigravity-cli/bin/).
+They sit in the outer binary's RW segment, so a PF_X filter on the outer
+program headers alone would skip them; each embedded ELF's own program headers
+say where its code is. Alignment is likewise checked per image: in 1.2.8 the
+helpers start at odd file offsets.
 """
 import struct
 import sys
@@ -85,13 +94,71 @@ def movz_x0(imm):
     return 0xD2800000 | (imm << 5)
 
 
-def read_segments(f, loads):
-    """Read each PT_LOAD once; both patchers scan the same buffers."""
+PT_LOAD = 1
+PF_X = 1
+EM_AARCH64 = 183
+
+
+def exec_loads(data, base):
+    """(vaddr, file offset, size) of each PT_LOAD with PF_X in the ELF at base.
+
+    Returns None unless base holds a plausible little-endian aarch64 ELF64
+    executable or PIE whose segments all fit in the file; stray b"\\x7fELF" bytes
+    in data sections fail these checks.
+    """
+    h = data[base:base + 64]
+    if len(h) < 64 or h[:4] != b"\x7fELF" or h[4] != 2 or h[5] != 1:
+        return None
+    e_type, e_machine = struct.unpack_from("<HH", h, 16)
+    phoff, = struct.unpack_from("<Q", h, 32)
+    phentsize, phnum = struct.unpack_from("<HH", h, 54)
+    if e_type not in (2, 3) or e_machine != EM_AARCH64 or phentsize != 56:
+        return None
+    if not 0 < phnum < 64 or base + phoff + phnum * 56 > len(data):
+        return None
+    loads = []
+    for i in range(phnum):
+        p_type, p_flags, p_off, p_va, _, p_fsz = struct.unpack_from(
+            "<IIQQQQ", data, base + phoff + i * 56)
+        if p_type != PT_LOAD or not p_flags & PF_X:
+            continue
+        if base + p_off + p_fsz > len(data):
+            return None
+        loads.append((p_va, base + p_off, p_fsz))
+    return loads
+
+
+def read_segments(f):
+    """Executable segments of the binary and of every ELF embedded in it.
+
+    Each entry is (vaddr, file offset, bytes, image). vaddr is relative to its
+    own image; image is None for the binary itself, else the file offset of
+    the embedded ELF header. All three patchers scan the same buffers.
+    """
+    f.seek(0)
+    data = f.read()
+    outer = exec_loads(data, 0)
+    if outer is None:
+        sys.exit("not an aarch64 ELF executable")
+    images = [(None, outer)]
+    i = data.find(b"\x7fELF", 1)
+    while i != -1:
+        loads = exec_loads(data, i)
+        if loads:
+            images.append((i, loads))
+        i = data.find(b"\x7fELF", i + 1)
     segs = []
-    for va, off, fsz in loads:
-        f.seek(off)
-        segs.append((va, off, f.read(fsz)))
+    for image, loads in images:
+        for va, off, fsz in loads:
+            segs.append((va, off, data[off:off + fsz], image))
     return segs
+
+
+def where(image, vaddr):
+    """How a hit is printed: bare vaddr in the binary, image-tagged if embedded."""
+    if image is None:
+        return f"{vaddr:#010x}"
+    return f"[embedded ELF @{image:#x}] {vaddr:#010x}"
 
 
 def patch_tcb_read(f, segs, dry):
@@ -116,19 +183,19 @@ def patch_tcb_read(f, segs, dry):
     """
     MRS = struct.pack("<I", MRS_TPIDR)
     hits = []
-    for va, off, blob in segs:
+    for va, off, blob, image in segs:
         i = blob.find(MRS)
         while i != -1:
             if i % 4 == 0 and i + 12 <= len(blob):
                 b2, c2 = struct.unpack("<II", blob[i + 4:i + 12])
                 if b2 == SUB_260 and c2 == LDR_X8_X8:
-                    hits.append((off + i + 8, va + i + 8))
+                    hits.append((off + i + 8, va + i + 8, image))
             i = blob.find(MRS, i + 1)
 
     if not hits:
         # Distinguish "already patched" from "moved in a new release" by
         # looking for the same prologue with the load already neutralised.
-        for va, off, blob in segs:
+        for va, off, blob, image in segs:
             i = blob.find(MRS)
             while i != -1:
                 if i % 4 == 0 and i + 12 <= len(blob):
@@ -140,8 +207,8 @@ def patch_tcb_read(f, segs, dry):
         print("  no TCB-offset read found (new release?)")
         return 0
 
-    for foff, vaddr in hits:
-        print(f"  {vaddr:#010x}  ldr x8,[x8] {LDR_X8_X8:#010x}"
+    for foff, vaddr, image in hits:
+        print(f"  {where(image, vaddr)}  ldr x8,[x8] {LDR_X8_X8:#010x}"
               f" -> mov x8,xzr {MOV_X8_XZR:#010x}")
         if not dry:
             f.seek(foff)
@@ -177,13 +244,13 @@ def patch_faccessat2(f, segs, dry):
         """Every `movz x0, #nr` that the two movs lead into and a bl leaves."""
         want = struct.pack("<I", movz_x0(nr))
         out = []
-        for va, off, blob in segs:
+        for va, off, blob, image in segs:
             i = blob.find(want)
             while i != -1:
                 if i % 4 == 0 and i >= 8 and i + 8 <= len(blob):
                     nxt = struct.unpack("<I", blob[i + 4:i + 8])[0]
                     if blob[i - 8:i] == shape and (nxt & BL_MASK) == BL_OP:
-                        out.append((off + i, va + i))
+                        out.append((off + i, va + i, image))
                 i = blob.find(want, i + 1)
         return out
 
@@ -198,34 +265,14 @@ def patch_faccessat2(f, segs, dry):
         return 0
 
     new = movz_x0(SYS_FACCESSAT)
-    for foff, vaddr in hits:
-        print(f"  {vaddr:#010x}  movz x0,#{SYS_FACCESSAT2}"
+    for foff, vaddr, image in hits:
+        print(f"  {where(image, vaddr)}  movz x0,#{SYS_FACCESSAT2}"
               f" {movz_x0(SYS_FACCESSAT2):#010x}"
               f" -> movz x0,#{SYS_FACCESSAT} {new:#010x}")
         if not dry:
             f.seek(foff)
             f.write(struct.pack("<I", new))
     return len(hits)
-
-
-def find_loads(f):
-    f.seek(0)
-    d = f.read(64)
-    if d[:4] != b"\x7fELF":
-        sys.exit("not an ELF file")
-    phoff = struct.unpack("<Q", d[32:40])[0]
-    phes = struct.unpack("<H", d[54:56])[0]
-    phn = struct.unpack("<H", d[56:58])[0]
-    loads = []
-    f.seek(phoff)
-    for _ in range(phn):
-        e = f.read(phes)
-        if struct.unpack("<I", e[0:4])[0] == 1:
-            off = struct.unpack("<Q", e[8:16])[0]
-            va = struct.unpack("<Q", e[16:24])[0]
-            fsz = struct.unpack("<Q", e[32:40])[0]
-            loads.append((va, off, fsz))
-    return loads
 
 
 def patch_load_bias(f, segs, dry):
@@ -235,21 +282,21 @@ def patch_load_bias(f, segs, dry):
     CMP = struct.pack("<I", 0xEB0B01FF)   # cmp x15, x11
     CSET = 0x1A9F37EF                     # cset w15, hs
     hits = []
-    for va, off, blob in segs:
+    for va, off, blob, image in segs:
         i = blob.find(CMP)
         while i != -1:
             if i % 4 == 0 and i + 12 <= len(blob):
                 w_cset, w_csel = struct.unpack("<II", blob[i + 4:i + 12])
                 if w_cset == CSET and is_csel_lo(w_csel):
                     d, n, m = decode_csel(w_csel)
-                    hits.append((off + i + 8, va + i + 8, w_csel, d, n, m))
+                    hits.append((off + i + 8, va + i + 8, w_csel, d, n, m, image))
             i = blob.find(CMP, i + 1)
 
     if not hits:
         # Either already patched, or the code moved in a new release. Tell the
         # two apart by looking for the movs this would have written.
         done = 0
-        for va, off, blob in segs:
+        for va, off, blob, image in segs:
             i = blob.find(CMP)
             while i != -1:
                 if i % 4 == 0 and i + 12 <= len(blob):
@@ -262,9 +309,9 @@ def patch_load_bias(f, segs, dry):
             return 0
         sys.exit("found no load-bias csel sites — has the binary changed?")
 
-    for foff, vaddr, old, d, n, m in hits:
+    for foff, vaddr, old, d, n, m, image in hits:
         new = mov_reg(d, m)
-        print(f"  {vaddr:#010x}  csel x{d},x{n},x{m},lo {old:#010x}"
+        print(f"  {where(image, vaddr)}  csel x{d},x{n},x{m},lo {old:#010x}"
               f" -> mov x{d},x{m} {new:#010x}")
         if not dry:
             f.seek(foff)
@@ -281,8 +328,7 @@ def main():
 
     mode = "rb" if dry else "r+b"
     with open(path, mode) as f:
-        loads = find_loads(f)
-        segs = read_segments(f, loads)
+        segs = read_segments(f)
         print("google_find_phdr load-bias sites:")
         n = patch_load_bias(f, segs, dry)
         print("glibc TCB-offset reads:")

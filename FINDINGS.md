@@ -418,6 +418,81 @@ offsets from `strace -k` disassembles fine and some symbol names survive.
     grep -A12 SEGV_MAPERR k.log
     objdump -d --start-address=0x94e3278 --stop-address=0x94e32e0 musltest
 
+## Patch sites across releases
+
+All three bugs survive every release so far with byte-identical encodings;
+only the addresses move. `patch.py --dry-run` on Google's stock binaries
+(addresses are virtual; in the main text segment they equal file offsets):
+
+| Site | 1.2.7 | 1.2.8 | 1.2.9 | 1.2.10 |
+|---|---|---|---|---|
+| load-bias `csel` ×5 (#1075) | `0x94e27e0`…`0x94e2880` | `0x9072e00`…`0x9072ea0` | `0x90bfca0`…`0x90bfd40` | `0x9147d80`…`0x9147e20` |
+| TCB read (#1079) | `0x94e3538` | `0x9073b58` | `0x90c09f8` | `0x9148ad8` |
+| `faccessat2` | — | `0x653b004` | `0x6569064` | `0x65b5024` |
+
+### Two embedded helper executables, since at least 1.2.8
+
+The binary carries two more aarch64 ELFs as data in its RW segment, and both
+inherit bugs from the list above. Their offsets in the outer file:
+
+| Embedded ELF | 1.2.8 | 1.2.9 | 1.2.10 |
+|---|---|---|---|
+| ripgrep | `0xaf19479` | `0xaf8b4b8` | `0xb089ae0` |
+| webm_encoder | `0xb5043d9` | `0xb576418` | `0xb674a40` |
+
+In 1.2.8 both start at odd offsets. `patch.py` used to scan the outer segments
+and require 4-byte alignment relative to them, so it missed both images there
+and patched 7 sites. In 1.2.9 and 1.2.10 the offsets happen to be aligned, so it
+found 14 by accident. It now reads each embedded ELF's own program headers and
+scans only their `PF_X` segments (see below). On every release so far that gives
+14 sites: 7 in agy, 6 in ripgrep, 1 in webm_encoder. **An install of 1.2.8 made
+with the old `patch.py` has unpatched copies of both helpers.** agy does not
+start them on that release, and they could not run anyway (see the loader below).
+
+**ripgrep** (~6.2MB): a Google build of `third_party/rust/ripgrep/v14`, linked
+against the same TCMalloc/Abseil code. It has its own copies of the five
+load-bias `csel`s and the TCB read, at image vaddrs `0x3bad40`…`0x3bade0` and
+`0x3bba98` in 1.2.8/1.2.9, and `0x3bad60`…`0x3bae00` and `0x3bbab8` in 1.2.10.
+In the tests so far agy never extracts or runs it. A search task in print mode
+shelled out to `grep` instead.
+
+**webm_encoder** (~15.8MB; its section headers come first in the file, so
+sizing it from `e_shoff` gives far too small a number): a Go program,
+`//third_party/jetski/cortex/utils/mcp/encoder:webm_encoder`, built with
+Google's `go1.28-20260721-RC03`. It drives Chrome over CDP to record WebM. It
+contains no TCMalloc or Abseil code, only the Go standard library's
+`faccessat2` wrapper at image vaddr `0x1bdde4`, byte-identical in every
+release:
+
+    mov x2,x0; ldr x4,[sp,#0x88]; mov x5,xzr; mov x6,xzr
+    movz x0,#439; bl Syscall6; cbz x2,...; cmp x2,#2
+
+1.2.10 extracts it at startup ("Installing/updating embedded webm_encoder
+binary to %s") to `~/.gemini/antigravity-cli/bin/webm_encoder`, together with
+an `agentapi` launcher script there that re-executes the agy binary. The
+extracted file is byte-identical to the patched embedded copy, so patching it
+inside agy is enough.
+
+Both helpers request `/usr/grte/v5/lib/ld-linux-aarch64.so.1`, the loader path
+of Google's internal runtime. Ordinary systems do not have it. On Termux the
+extracted webm_encoder fails with `cannot execute: required file not found`,
+and the same would happen on any standard glibc distribution.
+
+### Why the scan is per-ELF `PF_X`
+
+`patch.py` searches only `PT_LOAD` segments with `PF_X`, both the binary's own
+and those of each embedded ELF, found by `\x7fELF` plus a header sanity check
+(ELF64, little-endian, `EM_AARCH64`, `ET_EXEC`/`ET_DYN`, program headers in
+bounds). The embedded images live in the outer binary's RW segment, so a
+`PF_X` filter on the outer headers alone would skip 7 of the 14 sites.
+Checking alignment per image also fixes the 1.2.8 miss.
+
+### 1.2.10 runs
+
+1.2.10, patched at all 14 sites and installed into a scratch copy of the
+installer, passes `--version`, `--help`, `agy models` (login and network), and
+a print-mode (`-p`) task that uses tools.
+
 ## Caveat
 
 Google does not publish the source (no go.mod, no .go files — the repo is

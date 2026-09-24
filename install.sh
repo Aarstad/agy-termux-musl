@@ -9,7 +9,7 @@
 #                                the wrapper's self-repair use this)
 #
 # Nothing here redistributes Google's binary: this downloads their published
-# release, applies 28 bytes of patches, and builds a small shim beside it. The
+# release, applies 56 bytes of patches, and builds a small shim beside it. The
 # musl loader it links against is vendored in lib/ (see lib/README.md).
 #
 # Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
@@ -76,7 +76,8 @@ fi
 
 # --- patch -------------------------------------------------------------------
 # Three fixes -- the google_find_phdr load bias, the glibc TCB read, and the
-# seccomp-blocked faccessat2 -- 28 bytes in place, file size unchanged.
+# seccomp-blocked faccessat2 -- 14 instructions (56 bytes) in place, file size
+# unchanged. Seven are in agy itself, seven in the two helper ELFs it embeds.
 # See FINDINGS.md, and antigravity-cli#1075 upstream.
 #
 # TCMalloc's 48-bit VA assumption is not patched: on 1.2.x the allocator is
