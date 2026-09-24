@@ -13,8 +13,7 @@ Unlike heavier agent CLIs (which often hold 1.0–1.5 GB resident RAM across sub
 ### 1. Requirements
 
 - **Termux on ARM64 (`aarch64`)**: Run `uname -m` to verify it prints `aarch64`.
-- **The musl loader**: `$PREFIX/lib/ld-musl-aarch64.so.1`  
-  *(If you already installed [claude-code-termux-musl](https://github.com/Aarstad/claude-code-termux-musl), you already have this! Otherwise, see [Installing the musl loader](#installing-the-musl-loader) below).*
+- **Nothing else to install first**: the musl loader is vendored in `lib/` (see [Installing the musl loader](#installing-the-musl-loader)).
 - **Build tools & dependencies**: `curl`, `tar`, `clang`, `python3`, `patchelf`.
 - **A Google account** with Antigravity access.
 
@@ -39,7 +38,7 @@ mkdir -p ~/.local/bin
 ln -sf "$PWD/agy" ~/.local/bin/agy
 ```
 
-*(Note: Stock Google v1.2.7+ binaries run directly without TCMalloc issues. For legacy 1.0.x fallback or custom builds, `--from-binary <path>` is also supported).*
+The only network fetch is Google's own release tarball. `./install.sh --from-binary <path>` patches a binary you already have instead.
 
 If `~/.local/bin` is in your `$PATH`, you can now run `agy` from anywhere.
 
@@ -76,16 +75,7 @@ It resolves the newest release from GitHub, hands the binary to `install.sh` to 
 
 ## Installing the musl Loader
 
-`agy` runs against Alpine's musl dynamic linker rather than a heavy glibc package.
-
-If `$PREFIX/lib/ld-musl-aarch64.so.1` is not already installed on your system, you can fetch and set it up quickly:
-
-```bash
-mkdir -p "$PREFIX/lib"
-curl -fsSL -o "$PREFIX/lib/ld-musl-aarch64.so.1" \
-  https://dl-cdn.alpinelinux.org/alpine/v3.20/main/aarch64/ld-musl-aarch64.so.1
-chmod +x "$PREFIX/lib/ld-musl-aarch64.so.1"
-```
+There is nothing to install. `lib/ld-musl-aarch64.so.1` is musl 1.2.6, taken unmodified from Alpine Linux's `musl` package and checked into this repo (MIT licensed, `lib/musl-COPYRIGHT`). `install.sh` points `agy.bin`'s `PT_INTERP` at that file, so `agy` runs from the checkout without touching `$PREFIX/lib`. Moving the checkout means re-running `./install.sh --from-binary agy.bin`.
 
 ---
 
@@ -117,7 +107,7 @@ Historically, Google's bundled TCMalloc allocator was assumed to break on Androi
 
 - **Status in v1.2.7+ / v1.2.8**: **Stock Google binaries do not trigger the TCMalloc abort.** Tracing stock 1.2.8 with `strace` across startup and active multi-turn sessions shows **0 calls to TCMalloc's system allocator** (`MAP_FIXED_NOREPLACE` 1 GB reservations). Active heap allocations are handled by Go's runtime allocator (whose 64MB arena hints the Linux kernel safely relocates).
 - **Stress-tested under real memory pressure**: Tested extensively on a confirmed VA39 device (Android 16 aarch64) under continuous low-memory conditions with 1.5–2.4 GB of active system swap. Stock unpatched TCMalloc completed all sessions without a single abort or mapping error.
-- **Installation**: Stock binaries work directly via `patch.py`. wallentx's `agy.va39` remains supported as an optional fallback via `--from-binary`, but is no longer required on modern releases.
+- **Installation**: Stock binaries work directly via `patch.py`. `install.sh` still runs the patched binary before installing it, so a future release that reintroduces the abort is refused rather than installed.
 
 ### Network hangs or TLS certificate errors
 Android lacks standard Linux paths like `/etc/resolv.conf` and `/etc/ssl/certs/ca-certificates.crt`.
@@ -132,7 +122,7 @@ Android lacks standard Linux paths like `/etc/resolv.conf` and `/etc/ssl/certs/c
 For the curious: Google distributes `agy` as a glibc-linked dynamic PIE executable. Making it run on Android under musl required solving five distinct hurdles:
 
 1. **glibc to musl Loader & Shim (`shim.c`)**:
-   The ELF interpreter is repointed to `ld-musl-aarch64.so.1`. A tiny 40-line C shim (`lib/libagyshim.so`) provides missing glibc symbols (`__open`, `__close`, `__read`, `pvalloc`, pthread cancellation stubs).
+   The ELF interpreter is repointed to the vendored `lib/ld-musl-aarch64.so.1`. A tiny 40-line C shim (`lib/libagyshim.so`) provides missing glibc symbols (`__open`, `__close`, `__read`, `pvalloc`, pthread cancellation stubs).
 2. **Dynamic Phdr Load-Bias Heuristic (`patch.py`)**:
    The internal binary function `google_find_phdr` miscalculated load biases under non-prelinking loaders due to an unsigned 64-bit comparison against `0xfffffffefffff001`. Replacing 5 conditional selects (`csel`) with unconditional moves (`mov`) fixes the crash at startup (20 bytes patched).
 3. **Thread-Control-Block (TCB) Fallback (`patch.py`)**:
@@ -151,6 +141,27 @@ Detailed analysis, disassembly traces, and offset tables are documented in [FIND
 - **[claude-code-termux-musl](https://github.com/Aarstad/claude-code-termux-musl)** — Claude Code on Termux via musl.
 - **[codex-termux](https://github.com/Aarstad/codex-termux)** — OpenAI Codex CLI on Termux.
 - **[wallentx/antigravity-cli-termux](https://github.com/wallentx/antigravity-cli-termux)** — The pioneer project that discovered the TCMalloc VA39 patch and proved running `agy` on Termux was possible. Its `agy.va39` also quietly carried the `faccessat2` fix — 1 of the 41 instructions it changes — which this repo depended on without knowing until it implemented the patch itself.
+
+### Upstream issues
+
+How the upstream threads relate, and where this repo's findings were posted:
+
+```
+TCMalloc abort on 39-bit VA kernels
+├── #9   Android proot-distro / Chromebook reports (1.0.0)
+│    └── this repo's comment: 1.2.x is clear, the Termux crash was faccessat2
+├── #64  the umbrella issue; maintainer: 1.0.4 "default built with malloc"
+│    ├── #267  1.0.4 confirmed on a 39-bit Odroid M2 (closed)
+│    ├── agy_acp_server still aborts (separate build, still open)
+│    └── this repo's comment: yes, the 1.0.4 fix held through 1.2.8
+└── musl loader crashes, independent of the allocator
+     ├── #1075  load-bias heuristic in google_find_phdr
+     └── #1079  TPIDR_EL0 - 0x260 assumes a glibc thread layout
+```
+
+- [#9](https://github.com/google-antigravity/antigravity-cli/issues/9) — [comment](https://github.com/google-antigravity/antigravity-cli/issues/9#issuecomment-5814495225)
+- [#64](https://github.com/google-antigravity/antigravity-cli/issues/64) — [comment](https://github.com/google-antigravity/antigravity-cli/issues/64#issuecomment-5814571946)
+- [#267](https://github.com/google-antigravity/antigravity-cli/issues/267), [#1075](https://github.com/google-antigravity/antigravity-cli/issues/1075), [#1079](https://github.com/google-antigravity/antigravity-cli/issues/1079)
 
 ## License
 

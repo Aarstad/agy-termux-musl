@@ -5,11 +5,12 @@
 #                                (agy-update follows the latest release instead)
 #   ./install.sh --version 1.2.7 pin a version
 #   ./install.sh --keep-download keep the downloaded tarball
-#   ./install.sh --from-binary F patch F instead of downloading (use this with
-#                                wallentx's VA39-patched engine; see README)
+#   ./install.sh --from-binary F patch F instead of downloading (agy-update and
+#                                the wrapper's self-repair use this)
 #
 # Nothing here redistributes Google's binary: this downloads their published
-# release, applies 28 bytes of patches, and builds a small shim beside it.
+# release, applies 28 bytes of patches, and builds a small shim beside it. The
+# musl loader it links against is vendored in lib/ (see lib/README.md).
 #
 # Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
 set -euo pipefail
@@ -43,34 +44,10 @@ command -v cc      >/dev/null || die "a compiler is required (pkg install clang)
 command -v python3 >/dev/null || die "python3 is required (pkg install python)"
 
 : "${PREFIX:=/data/data/com.termux/files/usr}"
-LOADER="$PREFIX/lib/ld-musl-aarch64.so.1"
-[ -x "$LOADER" ] || die "no musl loader at $LOADER
-  Install it first — claude-code-termux-musl's install.sh fetches it from Alpine:
-  https://github.com/Aarstad/claude-code-termux-musl"
+LOADER="$LIBDIR/ld-musl-aarch64.so.1"
+[ -f "$LOADER" ] || die "no musl loader at $LOADER (is this a full checkout?)"
+chmod +x "$LOADER"
 
-# TCMalloc assumes a 48-bit virtual address space and can abort before main()
-# on a 39-bit-VA kernel, which is most Android devices. That fix is not
-# implemented here (see patch.py).
-#
-# This is a heads-up, not a refusal. The heuristic below only knows where the
-# stack landed, and it cannot look at the binary at all -- so it cannot tell a
-# VA39-patched engine from a stock one, and measured on one VA39 device, stock
-# 1.2.7 and 1.2.8 both ran without the patch. The verify step decides instead,
-# by running the binary before anything is replaced.
-if [ -z "$FROM_BINARY" ]; then
-  top="$(awk 'END{split($1,a,"-"); print a[2]}' /proc/self/maps 2>/dev/null)"
-  if [ -n "$top" ] && [ "${#top}" -le 10 ]; then
-    warn "this kernel looks like a 39-bit user VA, where a stock binary may
-  abort in TCMalloc before anything else runs. Continuing anyway: the patched
-  binary is run before it is installed, and agy.bin is left alone if it does
-  not start. If it does not, start from wallentx's already-patched engine:
-
-    curl -fsSL -o agy.tar.gz \\
-      https://github.com/wallentx/antigravity-cli-termux/releases/download/v$VERSION/antigravity-termux-standalone.tar.gz
-    tar xzf agy.tar.gz agy.va39
-    ./install.sh --from-binary agy.va39"
-  fi
-fi
 
 
 # --- fetch -------------------------------------------------------------------
@@ -102,13 +79,9 @@ fi
 # seccomp-blocked faccessat2 -- 28 bytes in place, file size unchanged.
 # See FINDINGS.md, and antigravity-cli#1075 upstream.
 #
-# NOTE: TCMalloc's 48-bit VA assumption is a separate problem and is NOT patched
-# here. It can abort before main() on a 39-bit-VA kernel; measured on one such
-# device, stock 1.2.7 and 1.2.8 both ran without it, so the verify step below
-# decides rather than this comment. If it does abort, start from wallentx's
-# already-VA39-patched engine:
-#   https://github.com/wallentx/antigravity-cli-termux/releases
-# and pass it with --from-binary.
+# TCMalloc's 48-bit VA assumption is not patched: on 1.2.x the allocator is
+# never reached (FINDINGS.md), and the verify step below is the safety net if a
+# future release changes that.
 say "applying the binary patches"
 # Build into a temp file and rename at the end: overwriting agy.bin in place
 # fails with ETXTBSY if a copy is still running.
@@ -141,8 +114,8 @@ patchelf --add-needed libagyshim.so "$NEW"
 
 # --- verify ------------------------------------------------------------------
 # Run the patched binary before it replaces agy.bin, so a build that cannot
-# start is never installed -- a TCMalloc abort on a 39-bit-VA kernel is exactly
-# that case, and the wrapper's self-repair drives straight through here.
+# start is never installed. The wrapper's self-repair drives straight through
+# here too.
 #
 # $NEW is run directly rather than through the agy wrapper: the wrapper would
 # test whatever agy.bin is right now, which is the binary being replaced.
@@ -154,14 +127,10 @@ case "$v" in
 
   agy.bin was left exactly as it was; nothing has been replaced.
 
-  If that looks like a TCMalloc abort or a memory-mapping failure, this
-  kernel's 39-bit user VA is the likely cause and that patch is not
-  implemented here. Start from wallentx's already-patched engine:
-
-    curl -fsSL -o agy.tar.gz \\
-      https://github.com/wallentx/antigravity-cli-termux/releases/download/v$VERSION/antigravity-termux-standalone.tar.gz
-    tar xzf agy.tar.gz agy.va39
-    ./install.sh --from-binary agy.va39" ;;
+  Please open an issue with the output above and your Android version:
+    https://github.com/Aarstad/agy-termux-musl/issues
+  If you have a binary that is known to run here, install that one instead
+  with: ./install.sh --from-binary <path>" ;;
 esac
 
 # --- install -----------------------------------------------------------------

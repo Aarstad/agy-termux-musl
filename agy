@@ -28,7 +28,7 @@ LIBDIR="$HERE/lib"
 [ -e "$LIBDIR/libagyshim.so" ] || { echo "agy: shim missing from $LIBDIR" >&2; exit 1; }
 
 : "${PREFIX:=/data/data/com.termux/files/usr}"
-LOADER="$PREFIX/lib/ld-musl-aarch64.so.1"
+LOADER="$LIBDIR/ld-musl-aarch64.so.1"
 
 # Read PT_INTERP out of the ELF. patchelf moves it into a segment of its own at
 # the end of the file, so there is no fixed place to look for it.

@@ -3,3 +3,4 @@ dns-proxy
 *.tar.gz
 lib/*.so
 .update.*
+__pycache__/

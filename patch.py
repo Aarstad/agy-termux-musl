@@ -37,11 +37,9 @@ wrapper to 48 takes plain faccessat, which the filter allows. faccessat has no
 flags argument, so AT_EACCESS is dropped; for a single-uid app that is the same
 answer.
 
-This does NOT patch TCMalloc's 48-bit virtual-address assumption, which aborts
-before main() on the 39-bit-VA kernels most Android devices use. That is a
-separate fix (~82 bytes, retargeting TCMalloc's address-bit shifts from 48 to
-39) and this repo does not reimplement it -- start from wallentx's already
-VA39-patched engine instead, via install.sh --from-binary. See README.
+This does NOT patch TCMalloc's 48-bit virtual-address assumption. On 1.2.x
+the allocator is never reached, so nothing needs it (FINDINGS.md); install.sh
+runs the result before installing it in case a future release changes that.
 
 Sites are found by opcode pattern, not by hardcoded offsets, so a new release
 that moves the code still patches. Run with --dry-run to see what would change.
