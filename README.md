@@ -13,7 +13,7 @@ Unlike heavier agent CLIs (which often hold 1.0–1.5 GB resident RAM across sub
 ### 1. Requirements
 
 - **Termux on ARM64 (`aarch64`)**: Run `uname -m` to verify it prints `aarch64`.
-- **Nothing else to install first**: the musl loader is vendored in `lib/` (see [Installing the musl loader](#installing-the-musl-loader)).
+- **No external loader package required**: the musl loader is vendored directly in `lib/` (see [The Vendored musl Loader](#the-vendored-musl-loader)).
 - **Build tools & dependencies**: `curl`, `tar`, `clang`, `python3`, `patchelf`.
 - **A Google account** with Antigravity access.
 
@@ -73,7 +73,7 @@ It resolves the newest release from GitHub, hands the binary to `install.sh` to 
 
 ---
 
-## Installing the musl Loader
+## The Vendored musl Loader
 
 There is nothing to install. `lib/ld-musl-aarch64.so.1` is musl 1.2.6, taken unmodified from Alpine Linux's `musl` package and checked into this repo (MIT licensed, `lib/musl-COPYRIGHT`). `install.sh` points `agy.bin`'s `PT_INTERP` at that file, so `agy` runs from the checkout without touching `$PREFIX/lib`. Moving the checkout means re-running `./install.sh --from-binary agy.bin`.
 
