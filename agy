@@ -7,6 +7,8 @@
 #   AGY_NO_PROXY=1   use ambient proxy settings instead of starting one
 #   AGY_NO_REPAIR=1  report a replaced agy.bin instead of repatching it
 #   AGY_ALLOW_UPDATE=1  let agy's background auto-updater run (off by default)
+#   AGY_ENV_PASS="A B"  also pass these environment variables to agy
+#   AGY_ENV_ALL=1    pass the whole environment (no allowlist)
 #
 # Not "#!/usr/bin/env bash": Android has no /usr/bin/env.
 set -euo pipefail
@@ -129,9 +131,38 @@ fi
 # Termux preloads a bionic library that a musl process cannot relocate.
 unset LD_PRELOAD
 
+# Start agy with an allowlisted environment. Its file tools can read
+# /proc/self/environ like any other file, and whatever a tool reads is sent to
+# the model: an API key exported for some unrelated tool goes along with it.
+# Commands agy runs inherit the same environment, so the list keeps what a
+# Termux shell needs (Android's variables, for am and termux-api among them),
+# what agy reads itself, and what the wrapper set above.
+agy_env() {
+  local name
+  while IFS= read -r name; do
+    case "$name" in
+      HOME|PATH|PWD|SHELL|USER|LOGNAME|TMPDIR|PREFIX|TZ|LANG|LANGUAGE|LC_*) ;;
+      TERM|COLORTERM|TERM_PROGRAM|TERM_PROGRAM_VERSION|COLUMNS|LINES|NO_COLOR) ;;
+      EDITOR|VISUAL|PAGER|XDG_*) ;;
+      ANDROID_*|BOOTCLASSPATH|DEX2OATBOOTCLASSPATH|SYSTEMSERVERCLASSPATH) ;;
+      EXTERNAL_STORAGE|TERMUX_*) ;;
+      AGY_*|ANTIGRAVITY_*|GEMINI_*|GOOGLE_*|CLOUDSDK_*) ;;
+      http_proxy|https_proxy|all_proxy|no_proxy|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY) ;;
+      SSL_CERT_FILE|SSL_CERT_DIR) ;;
+      *) [[ " ${AGY_ENV_PASS:-} " == *" $name "* ]] || continue ;;
+    esac
+    printf '%s=%s\0' "$name" "${!name}"
+  done < <(compgen -e)
+}
+
 # Deliberately not exec: the EXIT trap is what stops the proxy, and exec would
 # replace this shell and orphan it. One idle shell buys deterministic cleanup.
-"$BIN" "$@"
+if [ -n "${AGY_ENV_ALL:-}" ]; then
+  "$BIN" "$@"
+else
+  mapfile -d '' -t AGY_ENV < <(agy_env)
+  env -i "${AGY_ENV[@]}" "$BIN" "$@"
+fi
 rc=$?
 cleanup
 exit "$rc"
