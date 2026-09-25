@@ -522,6 +522,72 @@ Checking alignment per image also fixes the 1.2.8 miss.
 installer, passes `--version`, `--help`, `agy models` (login and network), and
 a print-mode (`-p`) task that uses tools.
 
+## What the agent can read, and where it goes
+
+### Secrets in the environment reach the model
+
+agy's file tool (`view_file`) takes any absolute path the process can open,
+including `/proc/self/environ`. Whatever a tool returns becomes part of the
+conversation and is sent to Google's model API with the next turn. So every
+variable exported in the shell that starts agy, API keys for unrelated tools
+and session tokens from other programs among them, is one tool call away from
+leaving the device.
+
+It happened in a test here without any bad intent on the model's part. A
+print-mode prompt asked for a search using `grep_search`, which print mode does
+not offer. The main agent handed the task to a Flash subagent, which had no
+search tool either and set about working out where it was running. It
+web-searched the tool name, listed `~`, guessed file names, then read
+`/proc/self/cwd`, `/proc/self/environ`, `~/.bash_history`, and `cmdline` and
+`status` of its parent processes, before finding the file. Every one of those
+is a reasonable way to find a working directory, and `environ` (it holds
+`PWD`) and shell history (it holds the `cd`s) are the obvious ones. Reading
+files is the agent's job. The problem is that secrets were kept in places whose
+ordinary use is diagnostic.
+
+The fix belongs where the secrets are, not in the agent: a secret the process
+does not need should never be in its environment. The `agy` wrapper now starts
+`agy.bin` with an allowlisted environment (68 -> 40 variables in this shell):
+shell basics, Android and `TERMUX_*` variables (commands agy runs inherit the
+same environment, and `am`/termux-api need them), agy's own prefixes
+(`AGY_`, `ANTIGRAVITY_`, `GEMINI_`, `GOOGLE_`, `CLOUDSDK_`), and the proxy and
+CA settings the wrapper sets. `AGY_ENV_PASS="A B"` lets named variables
+through; `AGY_ENV_ALL=1` turns the list off. Verified with
+`strace -v -e execve`: planted fake secrets no longer reach `agy.bin`; login
+and network work unchanged.
+
+Not covered: files. `view_file` can read anything the user can, including
+shell history and other tools' config files. Keep secrets off command lines
+(or set `HISTIGNORE`) and out of files agy can reach; containing file reads
+would need a supervisor below the process (seccomp user notification works
+unprivileged on this Android kernel; namespaces and FUSE do not).
+
+### `search_web` runs on Google's side
+
+The phone does not contact a search engine. In the log, each `search_web`
+call in a subagent transcript lines up with exactly one non-streaming
+`v1internal:generateContent` request to `daily-cloudcode-pa.googleapis.com`,
+the same API the model runs on:
+
+| Transcript | Network log |
+|---|---|
+| `search_web` 15:47:20 -> 15:47:23 | 15:47:23 `generateContent` |
+| `search_web` 15:47:26 -> 15:47:29 | 15:47:29 `generateContent` |
+
+The binary agrees. The tool (`cortex/core/tools/search_web.go`,
+`cortex/handlers/search_web_handler.go`) is built on the genai SDK's
+server-side grounding types (`googleSearch`, `googleSearchRetrieval`,
+`groundingMetadata`), and the result the agent sees is a model-written summary
+wrapped as `The search for "%s" ...`. There is no search-engine client in it:
+no `www.google.com/search`, Custom Search API, Bing, SerpAPI, Brave or Tavily
+endpoint. The only `duckduckgo` strings sit in a URL-vetting list next to
+`registry.npmjs.org`, not in a search path.
+
+So searching does not use the user's IP or connection. The query goes to Google
+as part of the session, and the agent only gets Google's summary of the
+results, not the pages. This covers `search_web` only: `run_command` still
+reaches the network from the device (`curl`, `gh`, `git`).
+
 ## Caveat
 
 Google does not publish the source (no go.mod, no .go files — the repo is
