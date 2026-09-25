@@ -453,8 +453,37 @@ start them on that release, and they could not run anyway (see the loader below)
 against the same TCMalloc/Abseil code. It has its own copies of the five
 load-bias `csel`s and the TCB read, at image vaddrs `0x3bad40`…`0x3bade0` and
 `0x3bba98` in 1.2.8/1.2.9, and `0x3bad60`…`0x3bae00` and `0x3bbab8` in 1.2.10.
-In the tests so far agy never extracts or runs it. A search task in print mode
-shelled out to `grep` instead.
+agy uses it for the model's search tools. The system prompt tells the model to
+prefer `grep_search` and `find_by_name` over shell commands, and those run on
+ripgrep (`cortex/handlers/grep_handler.go`,
+`language_server/search/path_ripgrep.go`, `search_ripgrep.go`). On first use
+agy extracts it to `~/.cache/antigravity/bin/rg_embedded-<hash>`, named by
+content hash, and runs it. From an interactive session here (Sep 21):
+
+    search_ripgrep.go:116] extracted embedded ripgrep to …/rg_embedded-503f53d4dcdac98c (6205280 bytes)
+    search_ripgrep.go:459] ripgrep resolved to …/rg_embedded-503f53d4dcdac98c (embedded copy)
+    path_ripgrep.go:146] Executing ripgrep (…) to list files for query "" in /data/data/com.termux/files/home/notes
+    path_ripgrep.go:167] ripgrep … failed to start: fork/exec …
+    path_ripgrep.go:102] ripgrep at … could not be executed (…)
+
+It cannot start (the interpreter, below). The lookup order is fixed:
+
+    ripgrep binary not found: tried the embedded copy, co-located with the
+    executable, ~/.local/bin/%s, and $PATH
+
+The embedded copy is picked because it exists. It is not checked for whether
+it runs, and a failed start does not move on to the next candidate. agy falls
+back to `grep` or, for file listing, a Go directory walk ("could not be
+executed (%v), falling back to grep" / "…to in-process walk"). A working `rg`
+on `$PATH` (Termux has one) is never reached. The same happens on any glibc
+distribution: upstream #1029 reports it on x86_64.
+
+That copy was extracted before `patch.py` scanned embedded images, so its six
+sites are unpatched. The file is named by hash, so a patched agy extracts a new
+copy rather than reusing it.
+
+Print mode (`-p`) did not expose `grep_search` in the tests here, and nothing
+extracted ripgrep there. Testing this needs an interactive session.
 
 **webm_encoder** (~15.8MB; its section headers come first in the file, so
 sizing it from `e_shoff` gives far too small a number): a Go program,
