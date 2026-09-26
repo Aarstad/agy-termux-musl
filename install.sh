@@ -142,12 +142,13 @@ esac
 mv -f "$NEW" "$HERE/agy.bin" || die "could not install agy.bin (is a copy running?)"
 say "installed: agy $v"
 
-# --- DNS proxy ---------------------------------------------------------------
+# --- proxy -------------------------------------------------------------------
 # musl resolves through /etc/resolv.conf, which Android does not have, so DNS
 # inside the process hangs. This proxy runs on the bionic side, where it works.
-if [ -f "$HERE/dns-proxy.c" ]; then
-  say "building the DNS proxy"
-  cc -O2 -o "$HERE/dns-proxy" "$HERE/dns-proxy.c" || die "could not build the DNS proxy"
+if [ -f "$HERE/termux-http-proxy.c" ]; then
+  say "building the proxy"
+  cc -O2 -o "$HERE/termux-http-proxy" "$HERE/termux-http-proxy.c" || die "could not build the proxy"
+  rm -f "$HERE/dns-proxy" # Its name before the rename
 fi
 
 rm -rf "$tmp"; trap - EXIT

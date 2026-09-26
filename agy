@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Run the musl-patched Antigravity CLI on Termux.
 #
-# Starts the bionic-side DNS proxy (musl has no /etc/resolv.conf on Android, so
+# Starts the bionic-side proxy (termux-http-proxy) (musl has no /etc/resolv.conf on Android, so
 # DNS inside the process is dead) and points agy at it, then runs the binary.
 #
 #   AGY_NO_PROXY=1   use ambient proxy settings instead of starting one
@@ -23,7 +23,9 @@ while [ -L "$SELF" ]; do
 done
 HERE="$(cd "$(dirname "$SELF")" && pwd -P)"
 BIN="$HERE/agy.bin"
-PROXY="$HERE/dns-proxy"
+PROXY="$HERE/termux-http-proxy"
+# Built under its old name by an install from before the rename.
+[ -x "$PROXY" ] || [ ! -x "$HERE/dns-proxy" ] || PROXY="$HERE/dns-proxy"
 
 LIBDIR="$HERE/lib"
 
@@ -132,7 +134,7 @@ if [ -z "${AGY_NO_PROXY:-}" ]; then
         export all_proxy="$http_proxy"
       else
         PROXY_PID=""
-        echo "agy: DNS proxy did not start; network will not work" >&2
+        echo "agy: proxy did not start; network will not work" >&2
       fi
     fi
   fi

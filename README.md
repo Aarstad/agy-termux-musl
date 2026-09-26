@@ -111,7 +111,7 @@ Historically, Google's bundled TCMalloc allocator was assumed to break on Androi
 
 ### Network hangs or TLS certificate errors
 Android lacks standard Linux paths like `/etc/resolv.conf` and `/etc/ssl/certs/ca-certificates.crt`.
-- The included `agy` wrapper automatically points to the shared `termux-dns-proxy` daemon on `127.0.0.1:18080` if running, or launches an ephemeral companion bionic DNS tunnel (`dns-proxy`) as fallback.
+- The included `agy` wrapper automatically points to the shared proxy daemon (`termux-http-proxy`) on `127.0.0.1:18080` if running, or launches an ephemeral companion proxy (`termux-http-proxy`) as fallback.
 - Sets `SSL_CERT_FILE="$PREFIX/etc/tls/cert.pem"` for trusted root CA verification.
 - If you run the raw binary directly (`./agy.bin`), DNS queries will hang. Always launch via `./agy` (or the symlink).
 
@@ -129,8 +129,8 @@ For the curious: Google distributes `agy` as a glibc-linked dynamic PIE executab
    Glibc reserves several hundred bytes below the thread pointer (`[tp - 0x260]`). Musl has a smaller TCB, causing segfaults on unmapped memory. Forcing the check to zero routes execution into Google's built-in global fallback path (4 bytes patched).
 4. **seccomp-blocked `faccessat2` (`patch.py`)**:
    Go's `os/exec.LookPath` calls `unix.Eaccess` on any candidate that exists, which issues syscall 439. Android's seccomp filter answers an unknown syscall number with `SIGSYS` rather than `ENOSYS`, so Go never reaches its permission-bit fallback — the CLI dies in `clipboard` package init, before `main()`, from the moment `termux-clipboard-get` is on `$PATH`. The number in the `syscall.faccessat2` wrapper is rewritten to 48, plain `faccessat`, which the filter allows (4 bytes patched).
-5. **Android DNS & TLS Integration (`dns-proxy.c` / `termux-dns-proxy`)**:
-   A lightweight, single-threaded `epoll` + `splice(2)` proxy bridges network lookups to Android's bionic resolver, while Termux's certificate bundle provides trusted root CAs. Can run as a shared background service (`termux-dns-proxy`) across all musl tools.
+5. **Android DNS & TLS Integration (`termux-http-proxy.c`)**:
+   A lightweight, single-threaded `epoll` + `splice(2)` proxy bridges network lookups to Android's bionic resolver, while Termux's certificate bundle provides trusted root CAs. Can run as a shared background service across all musl tools.
 
 Detailed analysis, disassembly traces, and offset tables are documented in [FINDINGS.md](file:///data/data/com.termux/files/home/projects/agy-termux-musl/FINDINGS.md).
 
