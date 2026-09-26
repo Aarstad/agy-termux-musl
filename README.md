@@ -130,7 +130,7 @@ For the curious: Google distributes `agy` as a glibc-linked dynamic PIE executab
 4. **seccomp-blocked `faccessat2` (`patch.py`)**:
    Go's `os/exec.LookPath` calls `unix.Eaccess` on any candidate that exists, which issues syscall 439. Android's seccomp filter answers an unknown syscall number with `SIGSYS` rather than `ENOSYS`, so Go never reaches its permission-bit fallback — the CLI dies in `clipboard` package init, before `main()`, from the moment `termux-clipboard-get` is on `$PATH`. The number in the `syscall.faccessat2` wrapper is rewritten to 48, plain `faccessat`, which the filter allows (4 bytes patched).
 5. **Android DNS & TLS Integration (`termux-http-proxy.c`)**:
-   A lightweight, single-threaded `epoll` + `splice(2)` proxy bridges network lookups to Android's bionic resolver, while Termux's certificate bundle provides trusted root CAs. Can run as a shared background service across all musl tools.
+   A lightweight, single-threaded `epoll` + `splice(2)` proxy bridges network lookups to Android's bionic resolver, while Termux's certificate bundle provides trusted root CAs. Can run as a shared background service across all musl tools. Developed in [termux-http-proxy](https://github.com/Aarstad/termux-http-proxy).
 
 Detailed analysis, disassembly traces, and offset tables are documented in [FINDINGS.md](file:///data/data/com.termux/files/home/projects/agy-termux-musl/FINDINGS.md).
 
