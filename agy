@@ -5,6 +5,7 @@
 # DNS inside the process is dead) and points agy at it, then runs the binary.
 #
 #   AGY_NO_PROXY=1   use ambient proxy settings instead of starting one
+#   TERMUX_PROXY_TOKEN_FILE  proxy token (default ~/.config/termux-http-proxy/token)
 #   AGY_NO_REPAIR=1  report a replaced agy.bin instead of repatching it
 #   AGY_ALLOW_UPDATE=1  let agy's background auto-updater run (off by default)
 #   AGY_ENV_PASS="A B"  also pass these environment variables to agy
@@ -83,6 +84,23 @@ if [ -z "${AGY_ALLOW_UPDATE:-}" ]; then
   export AGY_CLI_DISABLE_AUTO_UPDATE="${AGY_CLI_DISABLE_AUTO_UPDATE:-true}"
 fi
 
+# The proxy can require a token (--auth-file): Android's loopback is reachable by every
+# app on the device, so without one any app could use it as an open relay. The token
+# lives where only Termux can read it. Credentials sent to a proxy that does not ask
+# for them are ignored, so this works whether or not the shared daemon requires them.
+PROXY_TOKEN_FILE="${TERMUX_PROXY_TOKEN_FILE:-$HOME/.config/termux-http-proxy/token}"
+proxy_url() {
+  local token=""
+  if [ -r "$PROXY_TOKEN_FILE" ]; then
+    token="$(tr -d '[:space:]' < "$PROXY_TOKEN_FILE")"
+  fi
+  if [ -n "$token" ]; then
+    printf 'http://proxy:%s@127.0.0.1:%s' "$token" "$1"
+  else
+    printf 'http://127.0.0.1:%s' "$1"
+  fi
+}
+
 PROXY_PID=""
 cleanup() { [ -n "${PROXY_PID:-}" ] && kill "$PROXY_PID" 2>/dev/null; return 0; }
 trap cleanup EXIT HUP INT TERM
@@ -91,7 +109,7 @@ if [ -z "${AGY_NO_PROXY:-}" ]; then
   if [ -n "${HTTP_PROXY:-${http_proxy:-}}" ]; then
     : # Ambient proxy already configured
   elif nc -z 127.0.0.1 18080 2>/dev/null; then
-    export http_proxy="http://127.0.0.1:18080"
+    export http_proxy="$(proxy_url 18080)"
     export https_proxy="$http_proxy"
     export HTTP_PROXY="$http_proxy"
     export HTTPS_PROXY="$http_proxy"
@@ -100,12 +118,14 @@ if [ -z "${AGY_NO_PROXY:-}" ]; then
     # The proxy prints its port on stdout then serves until killed.
     FIFO="$(mktemp -u "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/agy-proxy.XXXXXX")"
     if mkfifo "$FIFO" 2>/dev/null; then
-      "$PROXY" > "$FIFO" 2>/dev/null &
+      # Creates the token (random, 0600) on first use.
+      mkdir -p "${PROXY_TOKEN_FILE%/*}" && chmod 700 "${PROXY_TOKEN_FILE%/*}"
+      "$PROXY" --auth-file "$PROXY_TOKEN_FILE" > "$FIFO" 2>/dev/null &
       PROXY_PID=$!
       read -r -t 15 PORT < "$FIFO" || true
       rm -f "$FIFO"
       if [ -n "${PORT:-}" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
-        export http_proxy="http://127.0.0.1:$PORT"
+        export http_proxy="$(proxy_url "$PORT")"
         export https_proxy="$http_proxy"
         export HTTP_PROXY="$http_proxy"
         export HTTPS_PROXY="$http_proxy"
